@@ -3,7 +3,7 @@ import time
 import threading
 import requests
 import hashlib
-streamlit as st
+import streamlit as st
 from web3 import Web3
 from google import genai
 
@@ -155,7 +155,7 @@ if st.session_state.logged_in:
             st.session_state.bot_initialized = True
             st.sidebar.success("ক্রিপ্টো বট রান করছে!")
         else:
-            st.sidebar.info("ক্রিপ্টো বট ইতোমধ্যে চালু আছে।이")
+            st.sidebar.info("ক্রিপ্টো বট ইতোমধ্যে চালু আছে।")
 
     # Start Keep-Alive Telegram Bot Button
     if st.sidebar.button("🔔 Start Telegram Keep-Alive"):
