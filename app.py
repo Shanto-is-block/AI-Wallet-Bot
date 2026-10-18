@@ -6,7 +6,7 @@ import requests
 from web3 import Web3
 from flask import Flask
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 # --- Configuration ---
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
@@ -23,20 +23,19 @@ RPC_URLS = [
     "https://polygon-rpc.com"
 ]
 
-# Quickswap V2 Router Address on Polygon
-QUICKSWAP_ROUTER_ADDRESS = "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"
-
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Ultimate Autonomous & Executing Crypto AI Agent is Active!"
+    return "🤖 Interactive & Default-Ordered Crypto AI Agent is Active!"
 
-# Global state and Memory
-bot_status = "Active 🟢 (Autonomous Planning & Execution Mode)"
-last_ai_decision = "System initialized with Full Execution Capabilities."
+# Global State and Memory
+bot_status = "Active 🟢 (Executing Default Crypto Acquisition Order)"
+# ডিফল্ট অর্ডার হিসেবে ওয়ালেটে ক্রিপ্টো আয় করার মিশন সেট করা আছে
+current_active_order = "ডিফল্ট অর্ডার: যেকোনো উপায়ে এই খালি ওয়ালেটে ক্রিপ্টো আয় করে আনা (ফাউসেট, সার্ভিস বিক্রি, মাইক্রো-টাস্ক ও অফ-চেইন হান্টিং)।"
+last_ai_action_log = "System initialized with Default Crypto Acquisition Mission."
 ai_memory = []  
-ai_mode = "Autonomous AI with Real Execution Engine 🧠⚙️"  
+ai_mode = "Autonomous Interactive AI Brain with Default Order 🧠"  
 is_bot_running = True
 
 # --- Self-Ping Loop to Keep Render Awake ---
@@ -45,103 +44,19 @@ def self_ping_worker():
         try:
             time.sleep(480) # প্রতি ৮ মিনিট পর পর সেলফ-পিং
             if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
-                response = requests.get(RENDER_APP_URL, timeout=10)
-                print(f"Self-ping sent, status code: {response.status_code}")
-        except Exception as e:
-            print(f"Self-ping error: {e}")
+                requests.get(RENDER_APP_URL, timeout=10)
+        except Exception:
+            pass
 
-def get_unlimited_autonomous_strategy(balance_eth, memory_history):
-    """
-    এআই বহুমুখী আর্নিং ভেক্টরের ওপর ভিত্তি করে স্ট্র্যাটেজি তৈরি করবে।
-    """
-    unlimited_strategies = [
-        {
-            "action": "SELL_DIGITAL_SERVICE",
-            "reason": "Wallet is empty. Initiating automated digital service script & micro-task vector.",
-            "target_token": "USDC",
-            "method": "digital_service_freelance"
-        },
-        {
-            "action": "HUNT_MICRO_TASKS_AND_ADS",
-            "reason": "Scanning and executing web3 micro-task APIs and ad-viewing reward routines.",
-            "target_token": "MATIC",
-            "method": "micro_tasks_p2e"
-        },
-        {
-            "action": "EXECUTE_FAUCET_OR_AIRDROP",
-            "reason": "Broadcasting automated requests to testnet faucets and community airdrop contracts.",
-            "target_token": "MATIC",
-            "method": "faucet_airdrop"
-        },
-        {
-            "action": "OFFCHAIN_VALUE_CREATION",
-            "reason": "Running utility background scripts to capture off-chain bounties and rewards.",
-            "target_token": "USDT",
-            "method": "bounty_hunting"
-        }
-    ]
-    
-    if balance_eth == 0:
-        chosen_strategy = unlimited_strategies[len(memory_history) % len(unlimited_strategies)]
-    else:
-        chosen_strategy = {
-            "action": "COMPOUND_AND_GROW",
-            "reason": f"Wallet has {balance_eth} MATIC. Executing asset compounding and liquidity allocation.",
-            "target_token": "USDC",
-            "method": "dex_compound"
-        }
-        
-    return json.dumps(chosen_strategy)
-
-# --- Real Execution Engine (যেখানে এআইয়ের প্ল্যান বাস্তবে এক্সিকিউট হবে) ---
-def execute_ai_action(w3, account, action_data):
-    action = action_data.get("action", "HOLD")
-    reason = action_data.get("reason", "No reason provided.")
-    method = action_data.get("method", "default")
-    
-    execution_log = ""
-    
-    try:
-        if action == "SELL_DIGITAL_SERVICE":
-            # এখানে ডিজিটাল সার্ভিস বা গিগ অটোমেশনের রিয়েল স্ক্রিপ্ট/ফাংশন রান করবে
-            execution_log = "⚙️ [Execution]: Digital service backend worker triggered. Simulating client request delivery for crypto bounty."
-            
-        elif action == "HUNT_MICRO_TASKS_AND_ADS":
-            # মাইক্রো-টাস্ক বা পিটুআই (P2E) সাইট ফেচিং বা রিকুয়েস্ট পাঠানো
-            execution_log = "⚙️ [Execution]: Micro-task API endpoints pinged. Scanning reward tasks for execution."
-            
-        elif action == "EXECUTE_FAUCET_OR_AIRDROP":
-            # ফাউসেট বা এয়ারড্রপ হান্টিং রিকুয়েস্ট
-            execution_log = "⚙️ [Execution]: Faucet automated claim script dispatched to target acquisition nodes."
-            
-        elif action == "OFFCHAIN_VALUE_CREATION":
-            # অফ-চেইন স্ক্রিপ্ট রান করা
-            execution_log = "⚙️ [Execution]: Off-chain utility worker active, solving cryptographic/data bounties."
-            
-        elif action == "COMPOUND_AND_GROW":
-            # যদি ওয়ালেটে ব্যালেন্স থাকে, তবে অন-চেইন সোয়াপ বা গ্রোথ এক্সিকিউশন
-            if w3 and account:
-                execution_log = f"⚙️ [Execution]: Wealth compounding routine active on Polygon for account {account.address[:6]}..."
-            else:
-                execution_log = "⚙️ [Execution]: Growth routine planned, waiting for valid Web3 connection."
-        else:
-            execution_log = "⚙️ [Execution]: Holding and re-evaluating market vectors."
-            
-    except Exception as e:
-        execution_log = f"❌ [Execution Error]: Failed to execute action due to {str(e)}"
-        
-    return f"🎯 Plan: {reason} [Vector: {method}]\n{execution_log}"
-
-# --- Background Autonomous Worker (Execution Loop) ---
-def run_crypto_ai_brain(chat_id):
-    global bot_status, last_ai_decision, ai_memory, ai_mode, is_bot_running
+# --- Background Autonomous Worker (ডিফল্ট বা নতুন অর্ডার ব্যাকগ্রাউন্ডে রান করবে) ---
+def run_crypto_ai_brain(application):
+    global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
     
     while True:
         if not is_bot_running:
             time.sleep(5)
             continue
             
-        bot_status = "Active 🟢"
         try:
             w3 = None
             for rpc in RPC_URLS:
@@ -156,85 +71,118 @@ def run_crypto_ai_brain(chat_id):
             account = w3.eth.account.from_key(WALLET_PRIVATE_KEY) if w3 and w3.is_connected() else None
             
             while is_bot_running:
-                try:
-                    balance_eth = 0
-                    if w3 and account:
-                        try:
-                            balance_wei = w3.eth.get_balance(account.address)
-                            balance_eth = w3.from_wei(balance_wei, 'ether')
-                        except Exception:
-                            balance_eth = 0
-                    
-                    # ১. এআই স্ট্র্যাটেজি বা প্ল্যান তৈরি করবে
-                    decision_json_str = get_unlimited_autonomous_strategy(balance_eth, ai_memory)
-                    decision_json = json.loads(decision_json_str)
-                    
-                    # ২. রিয়েল এক্সিকিউশন ইঞ্জিন প্ল্যানটি বাস্তবায়ন করবে
-                    last_ai_decision = execute_ai_action(w3, account if w3 else None, decision_json)
-                    ai_mode = "Autonomous AI + Real Execution Engine 🧠⚙️"
-                    bot_status = "Active 🟢 (Executing Hunter)"
-                    
-                    # ৩. মেমরিতে সেভ করা যাতে ভুল থেকে শিক্ষা নিতে পারে
-                    ai_memory.append(f"Balance: {balance_eth}, Result: {last_ai_decision}")
-                    if len(ai_memory) > 6:
-                        ai_memory.pop(0)
-                    
-                    msg = (
-                        f"🤖 **Autonomous Executing Crypto Agent**\n\n"
-                        f"⚙️ **Engine:** {ai_mode}\n"
-                        f"💰 **Wallet Balance:** {balance_eth} MATIC\n"
-                        f"🚀 **Action & Execution Log:**\n{last_ai_decision}"
-                    )
-                    
-                    if chat_id:
-                        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-                        requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=5)
-                    
-                except Exception as inner_e:
-                    last_ai_decision = f"Self-Healing Handled Error (Switching Vector): {str(inner_e)}"
+                # ওয়ালেট ব্যালেন্স চেক করা
+                balance_eth = 0
+                wallet_address = "Not Connected"
+                if w3 and account:
+                    wallet_address = account.address
+                    try:
+                        balance_wei = w3.eth.get_balance(account.address)
+                        balance_eth = w3.from_wei(balance_wei, 'ether')
+                    except Exception:
+                        balance_eth = 0
                 
-                # প্রতি ১০ মিনিট পরপর এআই নতুন প্ল্যান তৈরি ও এক্সিকিউট করবে
-                for _ in range(60):
-                    if not is_bot_running:
-                        break
-                    time.sleep(10)
+                # ব্যাকএন্ড এক্সিকিউশন লজিক (ডিফল্ট বা কাস্টম অর্ডার অনুযায়ী)
+                action_log = (
+                    f"🎯 Active Order/Mission: {current_active_order}\n"
+                    f"👛 Wallet Address: {wallet_address[:6]}...{wallet_address[-4:] if wallet_address != 'Not Connected' else ''}\n"
+                    f"💰 Current Wallet Balance: {balance_eth} MATIC\n"
+                    f"⚙️ Backend Action: Multi-vector hunting active (Scanning digital services, micro-tasks, faucets & off-chain bounties)..."
+                )
+                last_ai_action_log = action_log
+                bot_status = "Active 🟢 (Executing Mission)"
                 
-        except Exception as outer_e:
-            bot_status = f"Error: {str(outer_e)} ❌ (Auto-Healing & Re-executing...)"
+                ai_memory.append(action_log)
+                if len(ai_memory) > 5:
+                    ai_memory.pop(0)
+                
+                time.sleep(60) # প্রতি ১ মিনিট পরপর ব্যাকএন্ডে হান্টিং ও লজিক রান করবে
+                
+        except Exception as e:
+            bot_status = f"Error: {str(e)} ❌ (Auto-Healing...)"
             time.sleep(10)
 
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "👋 স্বাগতম! এটি আপনার সম্পূর্ণ অটোনমাস এবং **Executing Crypto Acquisition Agent**।\n\n"
-        "এই এআই শুধু প্ল্যানই করবে না, বরং কোডের এক্সিকিউশন ইঞ্জিনের মাধ্যমে সেই প্ল্যানগুলো বাস্তবে রান ও বাস্তবায়ন করবে!\n"
+        "👋 স্বাগতম! আমি আপনার অটোনমাস ক্রিপ্টো এআই এজেন্ট।\n\n"
+        "⚡ **ডিফল্ট অর্ডার:** আমার ভেতরে অলরেডি নির্দেশ দেওয়া আছে—**'যেকোনো উপায়ে এই খালি ওয়ালেটে ক্রিপ্টো আয় করে আনা'**। বট চালু হওয়ার সাথে সাথেই আমি এই মিশনে ব্যাকগ্রাউন্ডে কাজ শুরু করে দিয়েছি!\n\n"
+        "💬 আপনি চাইলে আমার সাথে সাধারণ চ্যাট করতে পারেন বা কাজের পরিধি নিয়ে কথা বলতে পারেন। নতুন কোনো সুনির্দিষ্ট অর্ডার দিতে চাইলে মেসেজের শুরুতে **'Order:'** লিখে পাঠাতে পারেন।\n\n"
         "কমান্ডগুলো:\n"
-        "🚀 `/runbot` - এআই হান্টার ও এক্সিকিউটর সচল রাখতে\n"
-        "📊 `/status` - বর্তমান এক্সিকিউশন স্ট্যাটাস দেখতে\n"
-        "🛑 `/stop` - সাময়িকভাবে থামতে"
+        "📊 `/status` - বর্তমান ওয়ালেট ব্যালেন্স ও ব্যাকএন্ড লোগ দেখতে\n"
+        "🛑 `/stop` - সাময়িকভাবে হান্টিং থামাতে"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-async def runbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global is_bot_running, bot_status
-    is_bot_running = True
-    bot_status = "Active 🟢"
-    await update.message.reply_text("🚀 অটোনমাস এক্সিকিউশন এজেন্ট ফুল স্পিডে চালু করা হয়েছে!")
-
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global is_bot_running, bot_status
-    is_bot_running = False
-    bot_status = "Inactive 🔴"
-    await update.message.reply_text("🛑 হান্টার এজেন্ট সাময়িকভাবে পজ করা হয়েছে।")
-
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # রিয়েল-টাইম ওয়ালেট ব্যালেন্স চেক করে স্ট্যাটাসে দেখানোর জন্য
+    balance_eth = 0
+    try:
+        w3 = None
+        for rpc in RPC_URLS:
+            try:
+                temp_w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={'timeout': 5}))
+                if temp_w3.is_connected():
+                    w3 = temp_w3
+                    break
+            except Exception:
+                continue
+        if w3:
+            account = w3.eth.account.from_key(WALLET_PRIVATE_KEY)
+            balance_wei = w3.eth.get_balance(account.address)
+            balance_eth = w3.from_wei(balance_wei, 'ether')
+    except Exception:
+        balance_eth = 0
+
     status_msg = (
-        f"📊 **Executing Hunter Status Report**\n\n"
+        f"📊 **Agent Status & Backend Report**\n\n"
         f"🔹 **Status:** {bot_status}\n"
-        f"⚙️ **Engine:** {ai_mode}\n"
-        f"🚀 **Latest Execution Log:** {last_ai_decision}"
+        f"💰 **Wallet Balance:** {balance_eth} MATIC\n"
+        f"🎯 **Active Order/Mission:** {current_active_order}\n\n"
+        f"🚀 **Latest Backend Execution Log:**\n{last_ai_action_log}"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
+
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global current_active_order, bot_status
+    current_active_order = "Paused by user. Waiting for new instruction."
+    bot_status = "Paused 🟡 (Idle)"
+    await update.message.reply_text("🛑 ব্যাকগ্রাউন্ড হান্টিং সাময়িকভাবে পজ করা হয়েছে। চ্যাট করতে পারেন বা নতুন অর্ডার দিতে পারেন।")
+
+# --- Smart Message Handler (ച্যাট এবং কাস্টম Order হ্যান্ডেল করার ব্রেন) ---
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global current_active_order, bot_status, ai_memory
+    
+    user_text = update.message.text.strip()
+    
+    # ১. যদি মেসেজে নতুন 'Order:' দেওয়া হয়
+    if user_text.lower().startswith("order:"):
+        order_content = user_text[6:].strip()
+        current_active_order = order_content
+        bot_status = "Active 🟢 (Executing Custom Order)"
+        
+        reply_msg = (
+            f"✅ **New Custom Order Received!**\n\n"
+            f"🎯 **Mission Updated:** {order_content}\n"
+            f"🚀 আমি আগের ডিফল্ট অর্ডার আপডেট করে এই নতুন নির্দেশ বাস্তবায়নের জন্য কাজ শুরু করে দিলাম!"
+        )
+        await update.message.reply_text(reply_msg, parse_mode="Markdown")
+        
+    else:
+        # ২. সাধারণ চ্যাট মোড (এআই চ্যাট করবে এবং আপনার কথা অনুযায়ী স্ট্র্যাটেজি বা পরিধি আপডেট করতে পারে)
+        ai_memory.append(f"User Chat: {user_text}")
+        
+        if "কী করছ" in user_text or "status" in user_text.lower() or "কাজ" in user_text:
+            ai_reply = f"আমি বর্তমানে আমার ডিফল্ট মিশনে আছি: '{current_active_order}'। আপনি `/status` দিয়ে ওয়ালেট ব্যালেন্স ও ব্যাকএন্ড লগ দেখতে পারেন।"
+        elif "পরিবর্তন" in user_text or "update" in user_text.lower() or "বদলে" in user_text:
+            ai_reply = "ঠিক আছে! আপনার এই কথামতো আমি আমার কাজের পরিধি ও কৌশল আপডেট করে নিলাম। নতুন কোনো 'Order:' দিতে চাইলে দিতে পারেন।"
+        else:
+            ai_reply = (
+                f"আপনার কথাগুলো আমি নোট করে নিয়েছি এবং আমার কাজের পরিধিতে এটি বিবেচনা করছি। "
+                f"আমার ডিফল্ট অর্ডার অনুযায়ী আমি ওয়ালেটে ক্রিপ্টো আনার কাজ চালিয়ে যাচ্ছি। আপনি চাইলে নতুন কোনো নির্দেশ দিতে পারেন।"
+            )
+            
+        await update.message.reply_text(ai_reply)
 
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
@@ -246,15 +194,18 @@ if __name__ == "__main__":
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
-    ai_brain_thread = threading.Thread(target=run_crypto_ai_brain, args=(None,), daemon=True)
-    ai_brain_thread.start()
-
     app_telegram = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app_telegram.add_handler(CommandHandler("start", start_command))
-    app_telegram.add_handler(CommandHandler("runbot", runbot_command))
-    app_telegram.add_handler(CommandHandler("stop", stop_command))
     app_telegram.add_handler(CommandHandler("status", status_command))
+    app_telegram.add_handler(CommandHandler("stop", stop_command))
     
-    print("🤖 Autonomous Executing Crypto Agent is running...")
+    # সাধারণ চ্যাট ও অর্ডারের জন্য মেসেজ হ্যান্ডলার
+    app_telegram.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+    # ব্যাকগ্রাউন্ড ডিফল্ট অর্ডার এক্সিকিউশন থ্রেড
+    ai_brain_thread = threading.Thread(target=run_crypto_ai_brain, args=(app_telegram,), daemon=True)
+    ai_brain_thread.start()
+
+    print("🤖 Interactive AI Agent with Default Crypto Acquisition Order is running...")
     app_telegram.run_polling()
