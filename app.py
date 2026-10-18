@@ -2,187 +2,119 @@ import os
 import time
 import threading
 import requests
-import hashlib
-import streamlit as st
 from web3 import Web3
 from google import genai
+from flask import Flask
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
-# Streamlit Page Configuration
-st.set_page_config(
-    page_title="AI Autonomous Crypto Earning Bot",
-    page_icon="🤖",
-    layout="wide"
-)
+# --- Configuration (আপনি চাইলে Render Environment Variable থেকেও এগুলো নিতে পারেন) ---
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"      # আপনার টেলিগ্রাম বট টোকেন দিন
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"              # আপনার জেমিনি এআই কি দিন
+WALLET_PRIVATE_KEY = "YOUR_WALLET_PRIVATE_KEY"      # আপনার ওয়ালেট প্রাইভেট কি দিন
+RPC_URL = "https://rpc-amoy.polygon.technology/"      # নেটওয়ার্ক RPC URL
 
-# Initialize Session States
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+# Flask App to keep Render alive via Web Service pings
+app = Flask(__name__)
 
-if 'user_uid' not in st.session_state:
-    st.session_state.user_uid = ""
+@app.route('/')
+def home():
+    return "🤖 AI Telegram Crypto Bot is Alive and Running 24/7!"
 
-if 'bot_initialized' not in st.session_state:
-    st.session_state.bot_initialized = False
+# Global state for bot tracking
+bot_status = "Inactive 🔴"
+last_ai_decision = "No decision yet."
 
-if 'ping_bot_running' not in st.session_state:
-    st.session_state.ping_bot_running = False
-
-if 'logs' not in st.session_state:
-    st.session_state.logs = []
-
-def add_log(message):
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.logs.insert(0, f"[{timestamp}] {message}")
-
-# Telegram Sender Function
-def send_telegram_message(token, chat_id, message):
-    if token and chat_id:
-        try:
-            url = f"https://api.telegram.org/bot{token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": message}
-            requests.post(url, json=payload, timeout=5)
-        except Exception as e:
-            pass
-
-# --- MAIN PAGE: Separate Login Section (જો লগইন করা না থাকে) ---
-if not st.session_state.logged_in:
-    st.title("🔐 Autonomous Crypto Bot - User Login")
-    st.markdown("বট পরিচালনা করার জন্য আপনার ক্রিপ্টো ওয়ালেট প্রাইভেট কি এবং জেমিনি এপিআই কি দিয়ে লগইন করুন এবং ইউনিক ইউজার আইডি (UID) তৈরি করুন।")
-    st.markdown("---")
+# --- AI & Web3 Autonomous Worker ---
+def run_crypto_ai_brain(chat_id, app_context):
+    global bot_status, last_ai_decision
+    bot_status = "Active 🟢"
     
-    # Create a clean form container in the middle of the main page
-    with st.form("login_form"):
-        login_private_key = st.text_input("Burner Wallet Private Key", type="password")
-        login_gemini_key = st.text_input("Gemini API Key", type="password")
+    try:
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
+        if not w3.is_connected():
+            bot_status = "Error: RPC Connection Failed ❌"
+            return
+
+        account = w3.eth.account.from_key(WALLET_PRIVATE_KEY)
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
-        submitted = st.form_submit_button("🔑 Sign In / Generate UID")
-        if submitted:
-            if login_private_key and login_gemini_key:
-                raw_string = login_private_key + login_gemini_key
-                uid = "UID-" + hashlib.sha256(raw_string.encode()).hexdigest()[:10].upper()
-                
-                st.session_state.logged_in = True
-                st.session_state.user_uid = uid
-                st.session_state.saved_pk = login_private_key
-                st.session_state.saved_gk = login_gemini_key
-                st.success(f"সফলভাবে লগইন হয়েছে! আপনার UID: {uid}")
-                st.rerun()
-            else:
-                st.error("দয়া করে উভয় ফিল্ড সঠিকভাবে পূরণ করুন।")
-
-# --- MAIN DASHBOARD (লগইন সফল হওয়ার পর এটি দেখাবে) ---
-else:
-    # Sidebar for Logout & Extra Settings
-    st.sidebar.title("👤 User Session")
-    st.sidebar.success(f"UID: {st.session_state.user_uid}")
-    if st.sidebar.button("🚪 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.user_uid = ""
-        st.session_state.bot_initialized = False
-        st.rerun()
-
-    st.sidebar.markdown("---")
-    st.sidebar.title("⚙️ Bot Configurations")
-    rpc_url_input = st.sidebar.text_input("RPC URL", value="https://rpc-amoy.polygon.technology/")
-
-    st.sidebar.markdown("---")
-    st.sidebar.title("🤖 Telegram Keep-Alive Bot")
-    telegram_token_input = st.sidebar.text_input("Telegram Bot Token", type="password")
-    telegram_chat_id_input = st.sidebar.text_input("Telegram Chat ID", type="password")
-
-    # Main Dashboard UI
-    st.title(f"🤖 Autonomous Bot Dashboard")
-    st.info(f"সক্রিয় ইউজার আইডি (UID): **{st.session_state.user_uid}**")
-    st.markdown("---")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("📊 Live Wallet Status")
-        wallet_status_placeholder = st.empty()
-        wallet_status_placeholder.info("ওয়ালেট স্ট্যাটাস লোড হচ্ছে...")
-
-    with col2:
-        st.subheader("🧠 AI Brain & Live Activity Logs")
-        log_placeholder = st.empty()
-
-    # Background Worker 1: Crypto Earning Bot
-    def run_autonomous_bot(private_key, gemini_key, rpc_url):
-        try:
-            w3 = Web3(Web3.HTTPProvider(rpc_url))
-            if not w3.is_connected():
-                add_log("❌ নেটওয়ার্ক কানেকশন ব্যর্থ হয়েছে।")
-                return
-
-            account = w3.eth.account.from_key(private_key)
-            add_log(f"✅ সফলভাবে ওয়ালেট কানেক্ট হয়েছে: {account.address[:6]}...{account.address[-4:]}")
-
-            client = genai.Client(api_key=gemini_key)
-            add_log("🤖 জেমিনি এআই ব্রেন একটিভ করা হয়েছে।")
-
-            while True:
-                balance_wei = w3.eth.get_balance(account.address)
-                balance_eth = w3.from_wei(balance_wei, 'ether')
-                add_log(f"💰 বর্তমান ব্যালেন্স: {balance_eth} MATIC")
-
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents="Analyze current micro-task environment for automated web3 execution and give a short action status."
-                )
-                add_log(f"🧠 এআই সিদ্ধান্ত: {response.text.strip()}")
-
-                time.sleep(300)
-
-        except Exception as e:
-            add_log(f"❌ এরর দেখা দিয়েছে: {str(e)}")
-
-    # Background Worker 2: Keep-Alive Ping Bot
-    def run_keep_alive_bot(token, chat_id):
-        add_log("🔄 টেলিগ্রাম কিপ-অ্যালাইভ বট ব্যাকগ্রাউন্ডে চালু হয়েছে।")
         while True:
-            try:
-                ping_msg = f"🟢 সার্ভার একটিভ আছে [UID: {st.session_state.user_uid}]"
-                send_telegram_message(token, chat_id, ping_msg)
-            except Exception:
-                pass
-            time.sleep(600)
-
-    # Start Crypto Bot Button
-    if st.sidebar.button("🚀 Start Autonomous Bot"):
-        if not st.session_state.bot_initialized:
-            add_log("ক্রিপ্টো বট ব্যাকগ্রাউন্ডে চালু করা হচ্ছে...")
-            bot_thread = threading.Thread(
-                target=run_autonomous_bot,
-                args=(st.session_state.saved_pk, st.session_state.saved_gk, rpc_url_input),
-                daemon=True
+            # Check balance
+            balance_wei = w3.eth.get_balance(account.address)
+            balance_eth = w3.from_wei(balance_wei, 'ether')
+            
+            # AI Brain Decision making
+            prompt = f"Analyze current micro-task environment for automated web3 execution. Wallet Balance: {balance_eth} MATIC. Give a short, strategic action plan to grow assets."
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
             )
-            bot_thread.start()
-            st.session_state.bot_initialized = True
-            st.sidebar.success("ক্রিপ্টো বট রান করছে!")
-        else:
-            st.sidebar.info("ক্রিপ্টো বট ইতোমধ্যে চালু আছে।")
+            last_ai_decision = response.text.strip()
+            
+            # Construct Telegram update message
+            msg = (
+                f"🤖 **AI Bot Update**\n\n"
+                f"💰 **Balance:** {balance_eth} MATIC\n"
+                f"🧠 **AI Strategy:** {last_ai_decision}"
+            )
+            
+            # Send message to user via Telegram API
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=5)
+            
+            # Wait for 10 minutes before next cycle
+            time.sleep(600)
+            
+    except Exception as e:
+        bot_status = f"Error: {str(e)} ❌"
 
-    # Start Keep-Alive Telegram Bot Button
-    if st.sidebar.button("🔔 Start Telegram Keep-Alive"):
-        if not telegram_token_input or not telegram_chat_id_input:
-            st.sidebar.error("দয়া করে টেলিগ্রাম টোকেন ও চ্যাট আইডি দিন।")
-        else:
-            if not st.session_state.ping_bot_running:
-                ping_thread = threading.Thread(
-                    target=run_keep_alive_bot,
-                    args=(telegram_token_input, telegram_chat_id_input),
-                    daemon=True
-                )
-                ping_thread.start()
-                st.session_state.ping_bot_running = True
-                st.sidebar.success("টেলিগ্রাম কিপ-অ্যালাইভ বট চালু হয়েছে!")
-            else:
-                st.sidebar.info("কিপ-অ্যালাইভ বট ইতোমধ্যে চালু আছে।")
+# --- Telegram Command Handlers ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    welcome_text = (
+        "👋 স্বাগতম! এটি আপনার পার্সোনাল **AI Autonomous Crypto Bot**।\n\n"
+        "নিচের কমান্ডগুলো ব্যবহার করুন:\n"
+        "🚀 `/runbot` - এআই ও ক্রিপ্টো বট ব্যাকগ্রাউন্ডে চালু করতে\n"
+        "📊 `/status` - বটের বর্তমান অবস্থা ও ব্যালেন্স জানতে\n"
+        "🛑 `/stop` - বট বন্ধ করতে"
+    )
+    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-    # Render dynamic logs on UI
-    with log_placeholder.container():
-        if st.session_state.logs:
-            for log in st.session_state.logs[:15]:
-                st.write(log)
-        else:
-            st.info("এখনো কোনো লগ তৈরি হয়নি। বট চালু করতে সাইডবারের স্টার্ট বাটনে ক্লিক করুন।")
+async def runbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    global bot_status
+    if "Active" in bot_status:
+        await update.message.reply_text("⚠️ বট ইতিমধ্যে ব্যাকগ্রাউন্ডে চালু আছে!")
+    else:
+        await update.message.reply_text("🚀 এআই ক্রিপ্টো বট ব্যাকগ্রাউন্ডে চালু করা হচ্ছে...")
+        # Start background worker thread
+        t = threading.Thread(target=run_crypto_ai_brain, args=(chat_id, context), daemon=True)
+        t.start()
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    status_msg = (
+        f"📊 **Bot Status Report**\n\n"
+        f"🔹 **Status:** {bot_status}\n"
+        f"🧠 **Last AI Insight:** {last_ai_decision}"
+    )
+    await update.message.reply_text(status_msg, parse_mode="Markdown")
+
+# --- Run Flask Server in Background (For Render Keep-Alive) ---
+def run_flask():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+if __name__ == "__main__":
+    # Start Flask web server thread so Render keeps the service awake
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Start Telegram Bot Polling
+    app_telegram = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    app_telegram.add_handler(CommandHandler("start", start_command))
+    app_telegram.add_handler(CommandHandler("runbot", runbot_command))
+    app_telegram.add_handler(CommandHandler("status", status_command))
+    
+    print("🤖 Telegram Bot is polling for updates...")
+    app_telegram.run_polling()
