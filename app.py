@@ -12,7 +12,14 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
 GEMINI_API_KEY = "AQ.Ab8RN6IIrNUqpGF4vyN_feje76WvXS2RR2VEnPJ5MwgbsU3grQ"              
 WALLET_PRIVATE_KEY = "0x5dacb82768813d1099cba7032498179aeac894604dba7c2d4766f503b8188527"      
-RPC_URL = "https://polygon.llamarpc.com"      
+
+# একাধিক ব্যাকআপ পলিগন RPC লিস্ট (একটি কাজ না করলে অন্যটি কাজ করবে)
+RPC_URLS = [
+    "https://polygon-bor-rpc.publicnode.com",
+    "https://1rpc.io/matic",
+    "https://polygon.llamarpc.com",
+    "https://polygon-rpc.com"
+]
 
 # Flask App to keep Render alive via Web Service pings
 app = Flask(__name__)
@@ -26,15 +33,25 @@ bot_status = "Inactive 🔴"
 last_ai_decision = "No decision yet."
 ai_memory = []  # এআই-এর পূর্বের সিদ্ধান্তগুলো মনে রাখার জন্য মেমরি লিস্ট
 
-# --- AI & Web3 Autonomous Worker with Memory ---
+# --- AI & Web3 Autonomous Worker with Fallback RPC ---
 def run_crypto_ai_brain(chat_id, app_context):
     global bot_status, last_ai_decision, ai_memory
     bot_status = "Active 🟢"
     
     try:
-        w3 = Web3(Web3.HTTPProvider(RPC_URL))
-        if not w3.is_connected():
-            bot_status = "Error: RPC Connection Failed ❌"
+        w3 = None
+        # ব্যাকআপ RPC গুলো একটি-একটি করে টেস্ট করে কানেক্ট করার চেষ্টা করা
+        for rpc in RPC_URLS:
+            try:
+                temp_w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={'timeout': 10}))
+                if temp_w3.is_connected():
+                    w3 = temp_w3
+                    break
+            except Exception:
+                continue
+                
+        if not w3 or not w3.is_connected():
+            bot_status = "Error: All RPC Connections Failed ❌"
             return
 
         account = w3.eth.account.from_key(WALLET_PRIVATE_KEY)
@@ -89,7 +106,7 @@ def run_crypto_ai_brain(chat_id, app_context):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     welcome_text = (
-        "👋 স্বাগতম! এটি আপনার পার্সোনাল **AI Autonomous Crypto Bot (Memory Enabled)**।\n\n"
+        "👋 স্বাগতম! এটি আপনার পার্সোনাল **AI Autonomous Crypto Bot (Memory Enabled)**。\n\n"
         "নিচের কমান্ডগুলো ব্যবহার করুন:\n"
         "🚀 `/runbot` - এআই ও ক্রিপ্টো বট ব্যাকগ্রাউন্ডে চালু করতে\n"
         "📊 `/status` - বটের বর্তমান অবস্থা ও ব্যালেন্স জানতে\n"
