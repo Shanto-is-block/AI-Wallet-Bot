@@ -44,10 +44,10 @@ def run_crypto_ai_brain(chat_id, app_context):
             balance_wei = w3.eth.get_balance(account.address)
             balance_eth = w3.from_wei(balance_wei, 'ether')
             
-            # AI Brain Decision making
+            # AI Brain Decision making (Updated model name)
             prompt = f"Analyze current micro-task environment for automated web3 execution. Wallet Balance: {balance_eth} MATIC. Give a short, strategic action plan to grow assets."
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.8-flash',
                 contents=prompt
             )
             last_ai_decision = response.text.strip()
