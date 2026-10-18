@@ -10,7 +10,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 # --- Configuration ---
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
-GEMINI_API_KEY = "AQ.Ab8RN6KrPlxzNkbT67hNUWMSiOxoxnGegOdn4vAAxZ40-DEGJQ"              
+GEMINI_API_KEY = "AQ.Ab8RN6IIrNUqpGF4vyN_feje76WvXS2RR2VEnPJ5MwgbsU3grQ"              
 WALLET_PRIVATE_KEY = "0x5dacb82768813d1099cba7032498179aeac894604dba7c2d4766f503b8188527"      
 RPC_URL = "https://polygon-bor-rpc.publicnode.com"      
 
