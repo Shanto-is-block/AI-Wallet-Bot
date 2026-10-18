@@ -13,7 +13,7 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 GEMINI_API_KEY = "AQ.Ab8RN6IIrNUqpGF4vyN_feje76WvXS2RR2VEnPJ5MwgbsU3grQ"              
 WALLET_PRIVATE_KEY = "0x5dacb82768813d1099cba7032498179aeac894604dba7c2d4766f503b8188527"      
 
-# আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্কটি এখানে বসিয়ে দেবেন (Self-Ping এর জন্য)
+# আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্কটি এখানে বসানো আছে
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
 RPC_URLS = [
@@ -27,26 +27,25 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 AI Telegram Crypto Bot with Built-in Fallback AI & Self-Ping is Alive and Running 24/7!"
+    return "🤖 AI Telegram Crypto Bot with Auto-Recovery & Self-Ping is Alive and Running 24/7!"
 
 # Global state and Memory
-bot_status = "Inactive 🔴"
-last_ai_decision = "No decision yet."
+bot_status = "Active 🟢 (Auto-Running)"
+last_ai_decision = "System initialized and monitoring 24/7."
 ai_memory = []  
 ai_mode = "Gemini Cloud AI 🧠"  
-is_bot_running = False
+is_bot_running = True  # সার্ভার চালু হওয়ার সাথেই যেন ডিফল্টভাবে রান থাকে
 
 # --- Self-Ping Loop to Keep Render Awake ---
 def self_ping_worker():
     while True:
         try:
-            # প্রতি ৮ মিনিট (৪৮০ সেকেন্ড) পর পর নিজের সার্ভারে রিকোয়েস্ট পাঠাবে
-            time.sleep(480)
+            time.sleep(480) # প্রতি ৮ মিনিট পর পর নিজের সার্ভারে রিকোয়েস্ট পাঠাবে
             if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
                 response = requests.get(RENDER_APP_URL, timeout=10)
                 print(f"Self-ping sent successfully, status code: {response.status_code}")
         except Exception as e:
-            print(f"Self-ping error: {e}")
+            print(f"Self-ping error (Auto-recovering): {e}")
 
 def get_builtin_fallback_strategy(balance_eth):
     global ai_memory
@@ -57,12 +56,16 @@ def get_builtin_fallback_strategy(balance_eth):
     ]
     return strategies[len(ai_memory) % len(strategies)]
 
-# --- Background Autonomous Worker ---
+# --- Background Autonomous Worker with Self-Healing & Auto-Restart ---
 def run_crypto_ai_brain(chat_id):
     global bot_status, last_ai_decision, ai_memory, ai_mode, is_bot_running
-    bot_status = "Active 🟢"
     
-    while is_bot_running:
+    while True: # সারাজীবন নিরবচ্ছিন্নভাবে চলার জন্য আল্টিমেট হোয়াইল লুপ
+        if not is_bot_running:
+            time.sleep(5)
+            continue
+            
+        bot_status = "Active 🟢"
         try:
             w3 = None
             for rpc in RPC_URLS:
@@ -75,8 +78,8 @@ def run_crypto_ai_brain(chat_id):
                     continue
                     
             if not w3 or not w3.is_connected():
-                bot_status = "Error: All RPC Connections Failed ❌"
-                time.sleep(30)
+                bot_status = "Error: All RPC Connections Failed ❌ (Retrying...)"
+                time.sleep(15)
                 continue
 
             account = w3.eth.account.from_key(WALLET_PRIVATE_KEY)
@@ -120,8 +123,9 @@ def run_crypto_ai_brain(chat_id):
                         f"🧠 **AI Strategy:** {last_ai_decision}"
                     )
                     
-                    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-                    requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=5)
+                    if chat_id:
+                        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                        requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=5)
                     
                 except Exception as inner_e:
                     last_ai_decision = f"Warning: Loop error handled ({str(inner_e)})"
@@ -133,36 +137,32 @@ def run_crypto_ai_brain(chat_id):
                     time.sleep(10)
                 
         except Exception as outer_e:
-            bot_status = f"Error: {str(outer_e)} ❌ (Auto-recovering...)"
-            time.sleep(30)
+            bot_status = f"Error: {str(outer_e)} ❌ (Auto-recovering in 10s...)"
+            time.sleep(10) # কোনো বড় ক্র্যাশ খেলেও ১০ সেকেন্ড পর নিজে থেকে রিকভার হয়ে যাবে
 
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 স্বাগতম! এটি আপনার পার্সোনাল **AI Autonomous Crypto Bot**。\n\n"
+        "বটটি বর্তমানে **24/7 Auto-Pilot** মোডে সচল রয়েছে!\n"
         "ব্যবহার করার জন্য কমান্ডগুলো:\n"
-        "🚀 `/runbot` - বট ব্যাকগ্রাউন্ডে চালু করতে\n"
+        "🚀 `/runbot` - ব্যাকগ্রাউন্ড লুপ রিকভার বা নিশ্চিত করতে\n"
         "📊 `/status` - বর্তমান অবস্থা ও এআই স্ট্র্যাটেজি জানতে\n"
-        "🛑 `/stop` - বট বন্ধ করতে"
+        "🛑 `/stop` - সাময়িকভাবে বট বন্ধ করতে"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def runbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
     global is_bot_running, bot_status
-    if is_bot_running:
-        await update.message.reply_text("⚠️ বট ইতিমধ্যে ব্যাকগ্রাউন্ডে চালু আছে!")
-    else:
-        is_bot_running = True
-        await update.message.reply_text("🚀 এআই ক্রিপ্টো বট ব্যাকগ্রাউন্ডে চালু করা হচ্ছে...")
-        t = threading.Thread(target=run_crypto_ai_brain, args=(chat_id,), daemon=True)
-        t.start()
+    is_bot_running = True
+    bot_status = "Active 🟢"
+    await update.message.reply_text("🚀 এআই ক্রিপ্টো বট রিকভার ও সচল করা হয়েছে! এটি এখন ব্যাকগ্রাউন্ডে নিরবচ্ছিন্নভাবে চলবে।")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global is_bot_running, bot_status
     is_bot_running = False
     bot_status = "Inactive 🔴"
-    await update.message.reply_text("🛑 বট বন্ধ করা হয়েছে।")
+    await update.message.reply_text("🛑 বট সাময়িকভাবে বন্ধ করা হয়েছে। পুনরায় চালু করতে `/runbot` দিন।")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = (
@@ -185,8 +185,10 @@ if __name__ == "__main__":
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
-    # রেন্ডার সার্ভারে অ্যাপ ডিপ্লয় করার পর RENDER_APP_URL ভ্যারিয়েবলে আপনার রেন্ডার লিংকটি বসিয়ে দেবেন।
-    
+    # সার্ভার স্টার্ট হওয়ার সাথেই ব্যাকগ্রাউন্ড এআই ব্রেন থ্রেড অটোমেটিক চালু করে দেওয়া (চ্যাট আইডি ছাড়া ইনিশিয়াল রান)
+    ai_brain_thread = threading.Thread(target=run_crypto_ai_brain, args=(None,), daemon=True)
+    ai_brain_thread.start()
+
     app_telegram = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app_telegram.add_handler(CommandHandler("start", start_command))
@@ -194,5 +196,5 @@ if __name__ == "__main__":
     app_telegram.add_handler(CommandHandler("stop", stop_command))
     app_telegram.add_handler(CommandHandler("status", status_command))
     
-    print("🤖 Telegram Bot is polling for updates with Self-Ping enabled...")
+    print("🤖 Telegram Bot is running with 24/7 Auto-Recovery & Self-Ping...")
     app_telegram.run_polling()
