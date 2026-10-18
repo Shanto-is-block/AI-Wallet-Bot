@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 # --- Configuration (আপনি চাইলে Render Environment Variable থেকেও এগুলো নিতে পারেন) ---
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"      # আপনার টেলিগ্রাম বট টোকেন দিন
+TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      # আপনার টেলিগ্রাম বট টোকেন দিন
 GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"              # আপনার জেমিনি এআই কি দিন
 WALLET_PRIVATE_KEY = "YOUR_WALLET_PRIVATE_KEY"      # আপনার ওয়ালেট প্রাইভেট কি দিন
 RPC_URL = "https://rpc-amoy.polygon.technology/"      # নেটওয়ার্ক RPC URL
