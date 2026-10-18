@@ -44,43 +44,43 @@ def send_telegram_message(token, chat_id, message):
         except Exception as e:
             pass
 
-# --- Sidebar: Login & Authentication Section ---
-st.sidebar.title("🔐 User Login & Session")
-
+# --- MAIN PAGE: Separate Login Section (જો লগইন করা না থাকে) ---
 if not st.session_state.logged_in:
-    st.sidebar.markdown("আপনার ওয়ালেট প্রাইভেট কি এবং জেমিনি এপিআই দিয়ে লগইন করুন:")
-    login_private_key = st.sidebar.text_input("Burner Wallet Private Key", type="password", key="login_pk")
-    login_gemini_key = st.sidebar.text_input("Gemini API Key", type="password", key="login_gk")
+    st.title("🔐 Autonomous Crypto Bot - User Login")
+    st.markdown("বট পরিচালনা করার জন্য আপনার ক্রিপ্টো ওয়ালেট প্রাইভেট কি এবং জেমিনি এপিআই কি দিয়ে লগইন করুন এবং ইউনিক ইউজার আইডি (UID) তৈরি করুন।")
+    st.markdown("---")
     
-    if st.sidebar.button("🔑 Sign In / Generate UID"):
-        if login_private_key and login_gemini_key:
-            # Generate a unique UID based on credentials hash
-            raw_string = login_private_key + login_gemini_key
-            uid = "UID-" + hashlib.sha256(raw_string.encode()).hexdigest()[:10].upper()
-            
-            st.session_state.logged_in = True
-            st.session_state.user_uid = uid
-            st.session_state.saved_pk = login_private_key
-            st.session_state.saved_gk = login_gemini_key
-            st.sidebar.success(f"সফলভাবে লগইন হয়েছে! আপনার UID: {uid}")
-            st.rerun()
-        else:
-            st.sidebar.error("দয়া করে উভয় ফিল্ড পূরণ করুন।")
+    # Create a clean form container in the middle of the main page
+    with st.form("login_form"):
+        login_private_key = st.text_input("Burner Wallet Private Key", type="password")
+        login_gemini_key = st.text_input("Gemini API Key", type="password")
+        
+        submitted = st.form_submit_button("🔑 Sign In / Generate UID")
+        if submitted:
+            if login_private_key and login_gemini_key:
+                raw_string = login_private_key + login_gemini_key
+                uid = "UID-" + hashlib.sha256(raw_string.encode()).hexdigest()[:10].upper()
+                
+                st.session_state.logged_in = True
+                st.session_state.user_uid = uid
+                st.session_state.saved_pk = login_private_key
+                st.session_state.saved_gk = login_gemini_key
+                st.success(f"সফলভাবে লগইন হয়েছে! আপনার UID: {uid}")
+                st.rerun()
+            else:
+                st.error("দয়া করে উভয় ফিল্ড সঠিকভাবে পূরণ করুন।")
+
+# --- MAIN DASHBOARD (লগইন সফল হওয়ার পর এটি দেখাবে) ---
 else:
-    st.sidebar.success(f"লগইন করা আছে!")
-    st.sidebar.info(f"ইউজার আইডি (UID):\n**{st.session_state.user_uid}**")
+    # Sidebar for Logout & Extra Settings
+    st.sidebar.title("👤 User Session")
+    st.sidebar.success(f"UID: {st.session_state.user_uid}")
     if st.sidebar.button("🚪 Logout"):
         st.session_state.logged_in = False
         st.session_state.user_uid = ""
         st.session_state.bot_initialized = False
         st.rerun()
 
-# --- Main Dashboard (Only accessible if logged in) ---
-if st.session_state.logged_in:
-    st.title(f"🤖 Autonomous Bot Dashboard (User: {st.session_state.user_uid})")
-    st.markdown("---")
-
-    # Additional Controls in Sidebar for Bot Operations
     st.sidebar.markdown("---")
     st.sidebar.title("⚙️ Bot Configurations")
     rpc_url_input = st.sidebar.text_input("RPC URL", value="https://rpc-amoy.polygon.technology/")
@@ -90,12 +90,17 @@ if st.session_state.logged_in:
     telegram_token_input = st.sidebar.text_input("Telegram Bot Token", type="password")
     telegram_chat_id_input = st.sidebar.text_input("Telegram Chat ID", type="password")
 
+    # Main Dashboard UI
+    st.title(f"🤖 Autonomous Bot Dashboard")
+    st.info(f"সক্রিয় ইউজার আইডি (UID): **{st.session_state.user_uid}**")
+    st.markdown("---")
+
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("📊 Live Wallet Status")
         wallet_status_placeholder = st.empty()
-        wallet_status_placeholder.info(f"সক্রিয় ইউজার আইডি: {st.session_state.user_uid}")
+        wallet_status_placeholder.info("ওয়ালেট স্ট্যাটাস লোড হচ্ছে...")
 
     with col2:
         st.subheader("🧠 AI Brain & Live Activity Logs")
@@ -126,7 +131,7 @@ if st.session_state.logged_in:
                 )
                 add_log(f"🧠 এআই সিদ্ধান্ত: {response.text.strip()}")
 
-                time.sleep(300) # প্রতি ৫ মিনিট পরপর রান হবে
+                time.sleep(300)
 
         except Exception as e:
             add_log(f"❌ এরর দেখা দিয়েছে: {str(e)}")
@@ -181,5 +186,3 @@ if st.session_state.logged_in:
                 st.write(log)
         else:
             st.info("এখনো কোনো লগ তৈরি হয়নি। বট চালু করতে সাইডবারের স্টার্ট বাটনে ক্লিক করুন।")
-else:
-    st.info("👋 দয়া করে সাইডবার থেকে আপনার **Wallet Private Key** এবং **Gemini API Key** দিয়ে সাইন ইন (Sign In) করুন এবং আপনার ইউনিক ইউজার আইডি (UID) generate করুন।")
