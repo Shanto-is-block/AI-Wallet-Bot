@@ -1,3 +1,5 @@
-streamlit
 web3
 google-genai
+requests
+flask
+python-telegram-bot
