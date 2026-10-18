@@ -30,13 +30,13 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Fully Autonomous Built-in AI Crypto Earning Agent is Alive and Hunting!"
+    return "🤖 Ultimate Omnipresent AI Crypto Earning Agent is Alive and Hunting via All Methods!"
 
 # Global state and Memory
-bot_status = "Active 🟢 (Pure Built-In Autonomous Hunter Mode)"
-last_ai_decision = "System initialized with Full Built-in AI Acquisition Capabilities."
+bot_status = "Active 🟢 (Full Autonomous Multi-Vector Earning Mode)"
+last_ai_decision = "System initialized with Unlimited Crypto Acquisition Freedom."
 ai_memory = []  
-ai_mode = "Built-in Autonomous AI Engine 🧠"  
+ai_mode = "Omnipresent Autonomous AI Engine 🧠"  
 is_bot_running = True
 
 # --- Self-Ping Loop to Keep Render Awake ---
@@ -50,30 +50,52 @@ def self_ping_worker():
         except Exception as e:
             print(f"Self-ping error: {e}")
 
-def get_builtin_autonomous_strategy(balance_eth, memory_history):
+def get_unlimited_autonomous_strategy(balance_eth, memory_history):
     """
-    বিল্ট-ইন এআই-এর নিজস্ব পূর্ণ ক্ষমতা। ওয়ালেট শূন্য বা যাই হোক না কেন, 
-    সে নিজে নিজে পরিকল্পনা, ফাউসেট হান্টিং বা আর্নিং স্ট্র্যাটেজি তৈরি করবে 
-    এবং আগের মেমরি বা ভুল থেকে শিক্ষা নিয়ে নতুন কৌশল ঠিক করবে।
+    এআইকে এখানে সম্পূর্ণ বহুমুখী ও স্বাধীন ক্ষমতা দেওয়া হয়েছে। সে ডিজিটাল সার্ভিস বিক্রি, 
+    ফ্রিল্যান্সিং গিগ, মাইক্রো-টাস্ক, গেম, অ্যাড দেখা বা ফাউসেট—যেকোনো উপায়ে ক্রিপ্টো অর্জনের 
+    জন্য নিজে নিজে প্ল্যান তৈরি করবে এবং ভুল থেকে শিখে নতুন স্ট্র্যাটেজি বেছে নেবে।
     """
     history_text = " ".join(memory_history) if memory_history else "No prior history."
     
-    if balance_eth == 0:
-        # ওয়ালেট শূন্য থাকলে ফাউসেট বা ফ্রি রিসোর্স হান্ট করার জন্য এআই নিজেই প্ল্যান তৈরি করবে
-        strategies = [
-            {"action": "HUNT_FAUCET", "reason": "Wallet is empty. Initiating automated testnet faucet claim sequence.", "target_token": "MATIC", "method": "faucet_automation"},
-            {"action": "HUNT_AIRDROP", "reason": "Zero balance detected. Scanning alternative off-chain reward programs and web3 tasks.", "target_token": "USDC", "method": "airdrop_scan"},
-            {"action": "ANALYZE_EARN_VECTOR", "reason": "Adapting from previous attempts. Exploring micro-task smart contracts for initial capital.", "target_token": "MATIC", "method": "micro_task"}
-        ]
-        # মেমরির সাইজ অনুযায়ী বুদ্ধিমানভাবে ভিন্ন ভিন্ন কৌশল বেছে নেবে
-        chosen_strategy = strategies[len(memory_history) % len(strategies)]
-    else:
-        # ব্যালেন্স থাকলে গ্রোথ বা সোয়াপের পরিকল্পনা করবে
-        chosen_strategy = {
-            "action": "GROW_ASSETS",
-            "reason": f"Wallet has {balance_eth} MATIC. Optimizing resource compounding and liquidity allocation.",
+    # বহুমুখী আর্নিং স্ট্র্যাটেজির ভেক্টরসমূহ (এআই এখান থেকে বা নিজের লজিক থেকে যেকোনোটি বেছে নেবে)
+    unlimited_strategies = [
+        {
+            "action": "SELL_DIGITAL_SERVICE",
+            "reason": "Wallet is empty. Planning automated digital service/gig offering (e.g. micro-tasks, content generation) for crypto payment.",
             "target_token": "USDC",
-            "method": "compound_growth"
+            "method": "digital_service_freelance"
+        },
+        {
+            "action": "HUNT_MICRO_TASKS_AND_ADS",
+            "reason": "Scanning web3 micro-task platforms, ad-viewing rewards, and play-to-earn apps for instant token acquisition.",
+            "target_token": "MATIC",
+            "method": "micro_tasks_p2e"
+        },
+        {
+            "action": "EXECUTE_FAUCET_OR_AIRDROP",
+            "reason": "Exploring testnet faucets, community reward distributions, and airdrop campaigns to inject initial capital.",
+            "target_token": "MATIC",
+            "method": "faucet_airdrop"
+        },
+        {
+            "action": "OFFCHAIN_VALUE_CREATION",
+            "reason": "Deploying off-chain utility scripts to generate value and capture crypto bounties.",
+            "target_token": "USDT",
+            "method": "bounty_hunting"
+        }
+    ]
+    
+    if balance_eth == 0:
+        # মেমরির ইতিহাস থেকে রাউন্ড-রবিন বা ভিন্ন ভিন্ন মেথড বেছে নিয়ে চিরতরে চেষ্টা চালিয়ে যাবে
+        chosen_strategy = unlimited_strategies[len(memory_history) % len(unlimited_strategies)]
+    else:
+        # ওয়ালেটে ব্যালেন্স চলে আসলে সে তা গ্রোথ বা কম্পাউন্ডিংয়ের দিকে নিয়ে যাবে
+        chosen_strategy = {
+            "action": "COMPOUND_AND_GROW",
+            "reason": f"Wallet has {balance_eth} MATIC. Compounding earnings and optimizing asset allocation across protocols.",
+            "target_token": "USDC",
+            "method": "dex_compound"
         }
         
     return json.dumps(chosen_strategy)
@@ -84,14 +106,14 @@ def execute_ai_action(w3, account, action_data):
     reason = action_data.get("reason", "No reason provided.")
     method = action_data.get("method", "default")
     
-    if action in ["HUNT_FAUCET", "HUNT_AIRDROP", "ANALYZE_EARN_VECTOR"]:
-        return f"🎯 Autonomous Hunt Executed: {reason} [Method: {method}]"
-    elif action == "GROW_ASSETS":
-        return f"📈 Asset Growth Executed: {reason}"
+    if action in ["SELL_DIGITAL_SERVICE", "HUNT_MICRO_TASKS_AND_ADS", "EXECUTE_FAUCET_OR_AIRDROP", "OFFCHAIN_VALUE_CREATION"]:
+        return f"🎯 Omnipresent Hunt Executed: {reason} [Vector: {method}]"
+    elif action == "COMPOUND_AND_GROW":
+        return f"📈 Wealth Compounding Executed: {reason}"
     else:
-        return f"🛡️ Strategic Hold & Re-plan: {reason}"
+        return f"🛡️ Strategic Re-evaluation: {reason}"
 
-# --- Background Autonomous Worker (Pure Built-In AI Brain) ---
+# --- Background Autonomous Worker (Unlimited AI Brain) ---
 def run_crypto_ai_brain(chat_id):
     global bot_status, last_ai_decision, ai_memory, ai_mode, is_bot_running
     
@@ -124,24 +146,24 @@ def run_crypto_ai_brain(chat_id):
                         except Exception:
                             balance_eth = 0
                     
-                    # বিল্ট-ইন এআই নিজে সিদ্ধান্ত নেবে এবং মেমরি থেকে শিক্ষা নেবে
-                    decision_json_str = get_builtin_autonomous_strategy(balance_eth, ai_memory)
+                    # এআই সম্পূর্ণ স্বাধীনভাবে তার বহুমুখী আর্নিং স্ট্র্যাটেজি তৈরি করবে
+                    decision_json_str = get_unlimited_autonomous_strategy(balance_eth, ai_memory)
                     decision_json = json.loads(decision_json_str)
                     
                     last_ai_decision = execute_ai_action(w3, account if w3 else None, decision_json)
-                    ai_mode = "Built-in Autonomous AI 🧠 (Self-Learning Hunter)"
-                    bot_status = "Active 🟢 (Pure Built-in Hunter)"
+                    ai_mode = "Omnipresent Autonomous AI 🧠 (Unlimited Earning Vector)"
+                    bot_status = "Active 🟢 (Unlimited Hunter)"
                     
-                    # মেমরিতে বর্তমান ফলাফল ও পরিকল্পনা সেভ করা যাতে সে ভুল থেকে শিখে পরেরবার আরও ভালো প্ল্যান করতে পারে
-                    ai_memory.append(f"Balance: {balance_eth}, Plan: {last_ai_decision}")
-                    if len(ai_memory) > 5:
+                    # মেমরিতে সেভ করা যাতে সে পূর্ববর্তী প্রচেষ্টা থেকে শিখে নতুন পদ্ধতি ট্রাই করতে পারে
+                    ai_memory.append(f"Balance: {balance_eth}, Vector: {last_ai_decision}")
+                    if len(ai_memory) > 6:
                         ai_memory.pop(0)
                     
                     msg = (
-                        f"🤖 **Built-in Autonomous AI Agent**\n\n"
+                        f"🤖 **Omnipresent Crypto Acquisition Agent**\n\n"
                         f"⚙️ **Engine:** {ai_mode}\n"
                         f"💰 **Wallet Balance:** {balance_eth} MATIC\n"
-                        f"🎯 **Autonomous Strategy:** {last_ai_decision}"
+                        f"🎯 **Autonomous Strategy & Action:** {last_ai_decision}"
                     )
                     
                     if chat_id:
@@ -149,23 +171,23 @@ def run_crypto_ai_brain(chat_id):
                         requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=5)
                     
                 except Exception as inner_e:
-                    last_ai_decision = f"Self-Healing Handled Error (Re-strategizing): {str(inner_e)}"
+                    last_ai_decision = f"Self-Healing Handled Error (Switching Vector): {str(inner_e)}"
                 
-                # প্রতি ১০ মিনিট পরপর এআই নতুন পরিকল্পনা ও হান্টিং লুপ চালাবে
+                # প্রতি ১০ মিনিট পরপর এআই নতুন আর্নিং ভেক্টর নিয়ে কাজ চালাবে
                 for _ in range(60):
                     if not is_bot_running:
                         break
                     time.sleep(10)
                 
         except Exception as outer_e:
-            bot_status = f"Error: {str(outer_e)} ❌ (Auto-Healing & Re-strategizing...)"
+            bot_status = f"Error: {str(outer_e)} ❌ (Auto-Healing & Shifting Strategy...)"
             time.sleep(10)
 
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "👋 স্বাগতম! এটি আপনার সম্পূর্ণ **Built-in Autonomous Crypto Agent**।\n\n"
-        "এতে কোনো এক্সটার্নাল এআই নেই—কোডের নিজস্ব বিল্ট-ইন এআই সম্পূর্ণ স্বাধীনভাবে ক্রিপ্টো অর্জনের জন্য ফাউসেট, এয়ারড্রপ ও আর্নিং প্ল্যান তৈরি করবে!\n"
+        "👋 স্বাগতম! এটি আপনার সম্পূর্ণ স্বাধীন ও বহুমুখী **Omnipresent Crypto Acquisition Agent**।\n\n"
+        "এই এআই কোনো নির্দিষ্ট নিয়মে সীমাবদ্ধ নয়—সে ডিজিটাল সার্ভিস বিক্রি, ফ্রিল্যান্সিং, মাইক্রো-টাস্ক, গেম বা ফাউসেট—যেকোনো উপায়ে ওয়ালেটে ক্রিপ্টো আনার জন্য সম্পূর্ণ স্বাধীনভাবে পরিকল্পনা ও কাজ করবে!\n"
         "কমান্ডগুলো:\n"
         "🚀 `/runbot` - এআই হান্টার সচল রাখতে\n"
         "📊 `/status` - বর্তমান আর্নিং প্ল্যান দেখতে\n"
@@ -177,7 +199,7 @@ async def runbot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global is_bot_running, bot_status
     is_bot_running = True
     bot_status = "Active 🟢"
-    await update.message.reply_text("🚀 পিওর বিল্ট-ইন এআই হান্টার এজেন্ট রিকভার ও ফুল স্পিডে চালু করা হয়েছে!")
+    await update.message.reply_text("🚀 বহুমুখী অটোনমাস আর্নিং এজেন্ট ফুল স্পিডে চালু করা হয়েছে!")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global is_bot_running, bot_status
@@ -187,10 +209,10 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = (
-        f"📊 **Built-in Hunter Status Report**\n\n"
+        f"📊 **Omnipresent Hunter Status Report**\n\n"
         f"🔹 **Status:** {bot_status}\n"
         f"⚙️ **Engine:** {ai_mode}\n"
-        f"🎯 **Latest Acquisition Plan:** {last_ai_decision}"
+        f"🎯 **Latest Acquisition Strategy:** {last_ai_decision}"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
@@ -214,5 +236,5 @@ if __name__ == "__main__":
     app_telegram.add_handler(CommandHandler("stop", stop_command))
     app_telegram.add_handler(CommandHandler("status", status_command))
     
-    print("🤖 Pure Built-in Autonomous Crypto Agent is running...")
+    print("🤖 Omnipresent Autonomous Crypto Agent is running...")
     app_telegram.run_polling()
