@@ -14,7 +14,7 @@ GEMINI_API_KEY = "AQ.Ab8RN6IIrNUqpGF4vyN_feje76WvXS2RR2VEnPJ5MwgbsU3grQ"
 WALLET_PRIVATE_KEY = "0x5dacb82768813d1099cba7032498179aeac894604dba7c2d4766f503b8188527"      
 
 # আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্কটি এখানে বসিয়ে দেবেন (Self-Ping এর জন্য)
-RENDER_APP_URL = "https://your-bot-name.onrender.com" 
+RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
 RPC_URLS = [
     "https://polygon-bor-rpc.publicnode.com",
