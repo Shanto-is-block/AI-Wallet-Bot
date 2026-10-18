@@ -12,7 +12,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      # আপনার টেলিগ্রাম বট টোকেন দিন
 GEMINI_API_KEY = "AQ.Ab8RN6KmOWJ78r4CvZ8G8wl7CNJdqKTml-XQuFvybcR4S9aIYQ"              # আপনার জেমিনি এআই কি দিন
 WALLET_PRIVATE_KEY = "0x5dacb82768813d1099cba7032498179aeac894604dba7c2d4766f503b8188527"      # আপনার ওয়ালেট প্রাইভেট কি দিন
-RPC_URL = "https://rpc-amoy.polygon.technology/"      # নেটওয়ার্ক RPC URL
+RPC_URL = "https://polygon-bor-rpc.publicnode.com"      # নেটওয়ার্ক RPC URL
 
 # Flask App to keep Render alive via Web Service pings
 app = Flask(__name__)
