@@ -120,6 +120,10 @@ def telegram_webhook():
         print(f"Webhook Error: {e}")
     return "OK", 200
 
+# --- Flask Server Runner Function ---
+def run_flask():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
 # --- Self-Ping Loop to Keep Render Awake ---
 def self_ping_worker():
     while True:
@@ -132,7 +136,7 @@ def self_ping_worker():
 
 # --- Set Telegram Webhook Automatically ---
 def setup_telegram_webhook():
-    time.sleep(5) # সার্ভার ফুল স্টার্ট হওয়ার জন্য একটু সময় দেওয়া
+    time.sleep(5) 
     if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
         webhook_url = f"{RENDER_APP_URL}/{TELEGRAM_BOT_TOKEN}"
         api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={webhook_url}"
@@ -282,7 +286,7 @@ def evaluate_and_run_autonomous_brain(balance_sol):
         
         thought_log = (
             f"🧠 *[Custom AI Autonomous Brain]* ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
-            f"নির্বাচিত কৌশল: `{best_strategy}` (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
+            f"নির্বাচিত কৌশল: `{best_strategy}` (Weight: {strategy_pool[s]['weight']:.2f})" if False else f"🧠 *[Custom AI Autonomous Brain]* ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\nনির্বাচিত কৌশল: `{best_strategy}` (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
         )
         
         ai_success, ai_msg = call_custom_ai_and_hunt(balance_sol)
@@ -330,32 +334,26 @@ def run_autonomous_solana_ai_brain():
                 f"⚙️ *Execution Result:*\n{execution_output}"
             )
             
-            # ব্যাকগ্রাউন্ড থেকে সরাসরি টেলিগ্রাম চ্যাট আইডিতে অ্যালার্ট পাঠানো
             send_telegram_message(TELEGRAM_CHAT_ID, action_log)
             bot_status = "Active 🟢 (Custom AI API & Resilient Engine Running)"
             
-            time.sleep(300) # প্রতি ৫ মিনিট পর পর অটোনমাস লুপ চলবে
+            time.sleep(300) 
                 
         except Exception as e:
             bot_status = f"Error: {str(e)} ❌"
             time.sleep(15)
 
 if __name__ == "__main__":
-    # ফ্লাস্ক সার্ভার ব্যাকগ্রাউন্ডে রান করা
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    # রেন্ডার সার্ভার জাগিয়ে রাখার জন্য সেলফ-পিং থ্রেড
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
-    # টেলিগ্রাম ওয়েবহুক অটো সেটআপ থ্রেড
     webhook_thread = threading.Thread(target=setup_telegram_webhook, daemon=True)
     webhook_thread.start()
 
-    # অটোনমাস এআই ব্রেন থ্রেড
     ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, daemon=True)
     ai_brain_thread.start()
 
-    # মূল ফ্লাস্ক অ্যাপ সচল রাখা
     flask_thread.join()
