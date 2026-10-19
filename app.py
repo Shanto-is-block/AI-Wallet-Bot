@@ -12,7 +12,7 @@ import base58
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
 
 # আপনার সোলানা ওয়ালেটের প্রাইভেট কি (Base58 স্ট্রিং ফরম্যাটে এখানে বসাবেন)
-SOLANA_PRIVATE_KEY_BASE58 = "আপনার_সোলানা_ওয়ালেটের_প্রাইভেট_কি_এখানে_দিন"      
+SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 
 # আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্ক
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
