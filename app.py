@@ -19,9 +19,9 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 Groq API Key (সঠিক ছোট হাতের 'gsk_' ফরম্যাটে আপডেট করা হয়েছে)
-GROQ_API_KEYS = [
-    "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"
+# 👉 আপনার দেওয়া OpenRouter API Key এখানে সেট করা হয়েছে
+OPENROUTER_API_KEYS = [
+    "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"
 ]
 
 current_key_index = 0
@@ -36,11 +36,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Autonomous Crypto AI Trading Agent (Groq & Jupiter DEX Enabled) is Active!"
+    return "🤖 Autonomous Crypto AI Trading Agent (OpenRouter & Jupiter DEX Enabled) is Active!"
 
 # Global State
-bot_status = "Active 🟢 (Groq Llama AI & Jupiter DEX Trading Engine Running)"
-current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, Groq AI ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
+bot_status = "Active 🟢 (OpenRouter AI & Jupiter DEX Trading Engine Running)"
+current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, OpenRouter AI ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
 last_ai_action_log = "System initialized."
 ai_memory = []  
 is_bot_running = True
@@ -176,11 +176,11 @@ def rule_based_fallback_brain(balance_sol, market_info):
         f"*(নোট: এপিআই সাময়িকভাবে ব্যস্ত থাকায় ফলব্যাক ইঞ্জিন এই ডিসিশন নিয়েছে)*"
     )
 
-# --- Groq AI Brain Integration ---
-def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
+# --- OpenRouter AI Brain Integration ---
+def ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, user_order):
     global current_key_index
     
-    valid_keys = [k for k in GROQ_API_KEYS if k and "YOUR_" not in k]
+    valid_keys = [k for k in OPENROUTER_API_KEYS if k and "YOUR_" not in k]
     if not valid_keys:
         return rule_based_fallback_brain(balance_sol, market_info)
 
@@ -194,7 +194,7 @@ def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
     Analyze the market trends and decide whether conditions are optimal to trigger a buy/swap or hold. Provide strategic insights and answers clearly in Bengali.
     """
 
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    url = "https://openrouter.ai/api/v1/chat/completions"
     
     total_keys = len(valid_keys)
     for _ in range(total_keys):
@@ -202,11 +202,13 @@ def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
         
         headers = {
             "Authorization": f"Bearer {active_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ai-wallet-bot.onrender.com", # ঐচ্ছিক: OpenRouter র‍্যাঙ্কিংয়ের জন্য
+            "X-Title": "Solana AI Trading Bot"
         }
         
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "deepseek/deepseek-chat:free",  # অথবা openrouter-এর অন্য যেকোনো ফ্রি মডেল ব্যবহার করতে পারেন
             "messages": [
                 {"role": "user", "content": prompt}
             ],
@@ -214,7 +216,7 @@ def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            response = requests.post(url, headers=headers, json=payload, timeout=12)
             
             if response.status_code in [429, 403, 401]:
                 current_key_index = (current_key_index + 1) % total_keys
@@ -225,7 +227,7 @@ def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
                 choices = res_json.get('choices', [])
                 if choices:
                     text_output = choices[0]['message']['content']
-                    return f"🧠 **[Groq Llama AI Trading Brain]:**\n{text_output}"
+                    return f"🧠 **[OpenRouter AI Trading Brain]:**\n{text_output}"
             
             current_key_index = (current_key_index + 1) % total_keys
         except Exception:
@@ -247,7 +249,7 @@ def run_autonomous_solana_ai_brain(application):
             wallet_address, balance_sol = get_wallet_details()
             market_info = fetch_market_trends()
             
-            ai_thought_process = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+            ai_thought_process = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
 
             action_log = (
                 f"🎯 **Mission:** {current_active_order}\n"
@@ -256,7 +258,7 @@ def run_autonomous_solana_ai_brain(application):
                 f"{ai_thought_process}"
             )
             last_ai_action_log = action_log
-            bot_status = "Active 🟢 (Groq AI & Auto-DEX Trading Engine Healthy)"
+            bot_status = "Active 🟢 (OpenRouter AI & Auto-DEX Trading Engine Healthy)"
             
             ai_memory.append(action_log)
             if len(ai_memory) > 5:
@@ -271,8 +273,8 @@ def run_autonomous_solana_ai_brain(application):
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🚀 **Autonomous Crypto Trading Agent Activated (Powered by Groq AI)!**\n\n"
-        "📈 Groq Llama-3.3 এবং জুপিটার ডিইএক্স (Jupiter DEX) সফলভাবে সংযুক্ত রয়েছে।\n\n"
+        "🚀 **Autonomous Crypto Trading Agent Activated (Powered by OpenRouter AI)!**\n\n"
+        "📈 OpenRouter AI এবং জুপিটার ডিইএক্স (Jupiter DEX) সফলভাবে সংযুক্ত রয়েছে।\n\n"
         "কমান্ডসমূহ:\n"
         "📊 `/status` - লাইভ এআই অ্যানালাইসিস ও ব্যালেন্স দেখতে\n"
         "⚡ `Buy <Token_Mint> <Amount>` - নির্দিষ্ট টোকেন কিনতে\n"
@@ -283,7 +285,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wallet_address, balance_sol = get_wallet_details()
     market_info = fetch_market_trends()
-    ai_thought = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+    ai_thought = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
     
     status_msg = (
         f"📊 **AI Autonomous Trading Live Status**\n\n"
@@ -325,7 +327,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         wallet_address, balance_sol = get_wallet_details()
         market_info = fetch_market_trends()
-        ai_thought = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+        ai_thought = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
         await update.message.reply_text(
             f"🤖 এআই এজেন্ট রেসপন্স:\n\n{ai_thought}\n\nনতুন ট্রেড করতে ঠিক এভাবে লিখে পাঠান:\n**'Buy <Mint> <Amount>'** অথবা মিশন সেট করতে **'Order:'** লিখে পাঠান।"
         )
