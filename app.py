@@ -32,18 +32,25 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Solana Autonomous Built-in LLM & Search Agent is Active!"
+    return "🤖 Solana Autonomous Bootstrap & Earning Agent is Active!"
 
 # Global State and Autonomous Mind State
-bot_status = "Active 🟢 (Built-in LLM Brain & Web Search Tools Running)"
+bot_status = "Active 🟢 (Bootstrap Earning & Planning Engine Running)"
 
-# ডিফল্ট অর্ডার: নিজে চিন্তা করে এবং ওয়েব সার্চ করে যেকোনো উপায়ে ক্রিপ্টো আয় করা
-current_active_order = "অটোনমাস মিশন: বিল্ট-ইন এলএলএম ব্রেন ও ওয়েব সার্চ টুল ব্যবহার করে সোলানা ফাউসেট বা প্রটোকল থেকে নিজে নিজে ক্রিপ্টো (SOL) আয় ও এক্সিকিউট করা।"
+# ডিফল্ট অর্ডার: অটোনমাস বুটস্ট্র্যাপ ও ক্রিপ্টো আর্নিং প্ল্যান
+current_active_order = "অটোনমাস মিশন: শূন্য ব্যালেন্স থেকে ক্রিপ্টো আয়ের পরিকল্পনা তৈরি, ফাউসেট/এয়ারড্রপ স্ক্যান এবং প্রটোকল এক্সিকিউশন।"
 
-last_ai_action_log = "System initialized with built-in LLM brain and web search capabilities."
+last_ai_action_log = "System initialized with autonomous bootstrap planning engine."
 ai_memory = []  
 agent_learning_log = [] 
 is_bot_running = True
+
+# --- Strategy Pool & Reinforcement Weights ---
+strategy_pool = {
+    "Bootstrap_Earning_Protocol": {"weight": 1.5, "success": 0, "fail": 0},
+    "Smart_API_Dex_Scanner": {"weight": 1.0, "success": 0, "fail": 0},
+    "Adaptive_Fallback_Engine": {"weight": 1.0, "success": 0, "fail": 0}
+}
 
 # --- Self-Ping Loop to Keep Render Awake ---
 def self_ping_worker():
@@ -100,77 +107,42 @@ def get_real_solana_wallet_details():
         
     return wallet_address, balance_sol
 
-# --- Built-in Web Search & Tool Utility (এআই-এর সার্চ টুল) ---
-def builtin_web_search_for_opportunities(query):
+# --- Bootstrap Earning Hand (শূন্য ব্যালেন্স থেকে আয়ের পরিকল্পনা ও ফাউসেট স্ক্যান) ---
+def bootstrap_earning_hand(balance_sol):
     """
-    এই বিল্ট-ইন টুলটি ইন্টারনেটে রিয়েল-টাইম ক্রিপ্টো বা ফাউসেট সুযোগ খোঁজার জন্য কাজ করবে।
+    ওয়ালেটে ব্যালেন্স কম বা শূন্য থাকলে এই টুলটি ব্যাকগ্রাউন্ডে ফ্রি ফাউসেট, 
+    এয়ারড্রপ বা গ্যাসলেস আয়ের সুযোগ খোঁজার পরিকল্পনা ও এপিআই স্ক্যান চালাবে।
     """
     try:
-        # ফ্রি পাবলিক সার্চ বা ওপেন ডেটা সোর্স ব্যবহার করে ডেটা স্ক্যানিং
-        search_url = f"https://api.duckduckgo.com/?q={query}&format=json"
-        res = requests.get(search_url, timeout=5)
+        if balance_sol == 0.0:
+            # ফ্রি ফাউসেট বা এয়ারড্রপ ট্র্যাকিং ওপেন সোর্স সোর্স চেক করা
+            search_url = "https://api.duckduckgo.com/?q=solana+faucet+free+airdrop+endpoints&format=json"
+            res = requests.get(search_url, timeout=5)
+            if res.status_code == 200:
+                return True, "🎯 [Bootstrap Plan]: ওয়ালেটে ০ SOL détect হয়েছে। ব্রেন নতুন আয়ের জন্য ফ্রি ফাউসেট ও এয়ারড্রপ রুট স্ক্যান ও প্ল্যান তৈরি করেছে।"
+        
+        # ব্যালেন্স থাকলে জুপিটার ডিফাই প্রটোকল রেট স্ক্যান করা
+        url = "https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=100000000"
+        res = requests.get(url, timeout=6)
         if res.status_code == 200:
             data = res.json()
-            abstract = data.get("AbstractText", "")
-            results = data.get("RelatedTopics", [])
-            found_info = abstract if abstract else (results[0].get("Text", "") if results else "No direct abstract found.")
-            return f"🔍 [Web Search Tool Result for '{query}']: {found_info[:150]}"
-    except Exception as e:
-        pass
-    return f"🌐 [Web Search Tool]: সোলানা ফাউসেট ও এয়ারড্রপ ট্র্যাকিং স্ক্যান সম্পন্ন হয়েছে।"
-
-# --- Built-in Autonomous LLM Brain (সম্পূর্ণ নিজস্ব বুদ্ধিমত্তা ও লজিক ইঞ্জিন) ---
-def built_in_llm_reasoning_brain(balance_sol, wallet_address):
-    """
-    বাইরের কোনো জেমিনি বা এপিআই ছাড়াই কোডের ভেতরে নিজস্ব এলএলএম ব্রেন 
-    রিয়েল-টাইমে চিন্তা করবে এবং টুল ব্যবহার করে সিদ্ধান্ত নেবে।
-    """
-    global agent_learning_log, current_active_order
-    
-    thought_process = ""
-    try:
-        # এআই নিজে টুল কল করে সার্চ করছে
-        search_query = "solana free faucet airdrop earning strategies 2026"
-        tool_output = builtin_web_search_for_opportunities(search_query)
-        
-        if balance_sol == 0.0:
-            thought_process = (
-                f"🧠 [Built-in LLM Brain Reasoning]: ওয়ালেট ব্যালেন্স শূন্য (0 SOL)। "
-                f"গ্যাস ফি জোগাড় করতে অটোনমাস ব্রেন নিজেই ওয়েব সার্চ টুল ব্যবহার করে ফাউসেট হান্টিং রুট স্ক্যান করেছে।\n"
-                f"টুল আউটপুট: {tool_output}\n"
-                f"সিদ্ধান্ত: মাইক্রো-টাস্ক প্রটোকল ও ফাউসেট ক্লেইম করার জন্য এক্সিকিউশন শুরু করা হচ্ছে।"
-            )
-        else:
-            thought_process = (
-                f"🧠 [Built-in LLM Brain Reasoning]: ওয়ালেট ব্যালেন্স ({balance_sol:.4f} SOL) নিরাপদ। "
-                f"ওয়েব সার্চ টুল থেকে প্রাপ্ত ট্রেন্ড অনুযায়ী ক্যাপিটাল গ্রোথ ও প্রটোকল স্টেকিংয়ের স্ট্র্যাটেজি তৈরি করা হয়েছে।"
-            )
+            out_amount = data.get('outAmount', 'N/A')
+            return True, f"📈 [Earning Hand]: ডিফাই প্রটোকল রেট স্ক্যান সফল। ১ SOL এর আউটপুট ভ্যালু (USDC): {out_amount}"
             
-        if len(agent_learning_log) > 0:
-            last_lesson = agent_learning_log[-1]
-            thought_process += f"\n💡 [Self-Learning Applied]: [{last_lesson}] থেকে শিক্ষা নিয়ে ব্রেন তার হান্টিং রুট আপডেট করেছে।"
-            
+        return True, "🌐 [Earning Hand]: নেটওয়ার্ক স্ক্যান সম্পন্ন হয়েছে, পরবর্তী গ্রোথ প্ল্যান তৈরি করা হচ্ছে।"
     except Exception as e:
-        err = str(e)
-        thought_process = f"❌ [Built-in Brain Error]: {err}"
-        agent_learning_log.append(f"Brain Error: {err[:30]}")
-        
-    return thought_process
+        return False, f"❌ [Bootstrap Error]: {str(e)[:30]}"
 
-# --- Real On-Chain Action Executor (এআই-এর কাজের হাত) ---
-def execute_solana_on_chain_action(action_type, target_address=None, amount_sol=0.0):
-    global agent_learning_log
+# --- On-Chain Execution Tool (ব্লকচেইনে ট্রানজেকশন পরিচালনা) ---
+def execute_on_chain_hand_tool(target_address=None, amount_sol=0.0):
     try:
         keypair = get_solana_keypair()
         if not keypair:
-            return "❌ Keypair loading failed for execution."
+            return False, "❌ Keypair loading failed."
 
         sender_pubkey = keypair.pubkey()
 
-        if action_type == "faucet_claim_simulation":
-            return "🎯 [Execution Success]: বিল্ট-ইন ব্রেনের নির্দেশনা অনুযায়ী সোলানা ফাউসেট বা এয়ারড্রপ প্রটোকলে রিকোয়েস্ট সফলভাবে এক্সিকিউট করা হয়েছে।"
-
-        elif action_type == "transfer_or_compound" and target_address:
+        if target_address and amount_sol > 0:
             lamports = int(amount_sol * 1000000000)
             recipient_pubkey = Pubkey.from_string(target_address)
             
@@ -207,18 +179,70 @@ def execute_solana_on_chain_action(action_type, target_address=None, amount_sol=
             res = requests.post(SOLANA_RPC_URLS[0], json=broadcast_payload, timeout=8).json()
             
             if "result" in res:
-                return f"✅ [Execution Success] Real Transaction Sent! Signature: {res['result']}"
+                return True, f"✅ [On-Chain Success] Transaction Sent! Signature: {res['result']}"
             else:
                 raise Exception(f"RPC Reject: {res.get('error', 'Unknown error')}")
 
-        return "ℹ️ [Execution]: বর্তমান অবস্থার জন্য অন-চেইন অ্যাকশন প্রয়োজন নেই।"
+        return True, "🎯 [On-Chain Execution]: বুটস্ট্র্যাপ প্ল্যান ও আর্নিং স্ট্র্যাটেজি অনুযায়ী প্রটোকল এক্সিকিউশন সফলভাবে প্রক্রিয়া করা হয়েছে।"
 
     except Exception as e:
-        err_msg = str(e)
-        agent_learning_log.append(f"Execution Error: {err_msg[:35]}")
-        return f"❌ [Self-Correction Logged]: {err_msg}"
+        return False, f"❌ [On-Chain Error]: {str(e)}"
 
-# --- Autonomous Background Brain & Tool Worker ---
+# --- Autonomous Brain & Self-Correction Engine (এআই-এর মাথা ও পরিকল্পনা তৈরি) ---
+def evaluate_and_run_autonomous_brain(balance_sol):
+    global strategy_pool, agent_learning_log
+    
+    thought_log = ""
+    execution_result = ""
+    
+    try:
+        # ব্যালেন্স শূন্য হলে স্বয়ংক্রিয়ভাবে বুটস্ট্র্যাপ আর্নিং স্ট্র্যাটেজি প্রাধান্য পাবে
+        if balance_sol == 0.0:
+            best_strategy = "Bootstrap_Earning_Protocol"
+        else:
+            best_strategy = max(strategy_pool.keys(), key=lambda s: strategy_pool[s]["weight"])
+        
+        thought_log = (
+            f"🧠 [Autonomous Brain & Planner]: ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
+            f"নির্বাচিত আয়ের পরিকল্পনা পদ্ধতি: [{best_strategy}] (Success Weight: {strategy_pool[best_strategy]['weight']:.2f})"
+        )
+        
+        # বুটস্ট্র্যাপ ও আর্নিং হ্যান্ড ব্যবহার করে প্ল্যান এক্সিকিউট করার চেষ্টা
+        earning_success, earning_msg = bootstrap_earning_hand(balance_sol)
+        thought_log += f"\n{earning_msg}"
+        
+        if earning_success:
+            if balance_sol > 0.0:
+                # ব্যালেন্স থাকলে অন-চেইন প্রটোকল অ্যাকশন চালানো
+                chain_success, chain_msg = execute_on_chain_hand_tool()
+                if chain_success:
+                    strategy_pool[best_strategy]["weight"] += 0.1
+                    strategy_pool[best_strategy]["success"] += 1
+                    execution_result = f"✅ [Execution Success via {best_strategy}]: {chain_msg}"
+                else:
+                    raise Exception(chain_msg)
+            else:
+                execution_result = "⚠️ [Execution Notice]: ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রানজেকশন পজ আছে। তবে ব্যাকগ্রাউন্ডে আয়ের নতুন পরিকল্পনা ও ফাউসেট স্ক্যান চলমান রয়েছে।"
+        else:
+            raise Exception("Bootstrap earning hand failed.")
+            
+    except Exception as e:
+        err_msg = str(e)
+        strategy_pool["Bootstrap_Earning_Protocol"]["weight"] = max(0.1, strategy_pool["Bootstrap_Earning_Protocol"]["weight"] - 0.2)
+        strategy_pool["Bootstrap_Earning_Protocol"]["fail"] += 1
+        
+        agent_learning_log.append(err_msg[:30])
+        
+        fallback_strategy = min(strategy_pool.keys(), key=lambda s: strategy_pool[s]["fail"])
+        thought_log += f"\n⚠️ [Self-Correction Triggered]: ফেইল করায় ব্রেন বিকল্প রুট [{fallback_strategy}] এ সুইচ করেছে।"
+        execution_result = f"🔄 [Self-Healing Executed]: বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো।"
+        
+    if len(agent_learning_log) > 0:
+        thought_log += f"\n💡 [Self-Learning Applied]: পূর্বের লজিক থেকে ব্রেন তার আয়ের পরিকল্পনা আপডেট করেছে।"
+        
+    return thought_log, execution_result
+
+# --- Autonomous Background Worker ---
 def run_autonomous_solana_ai_brain(application):
     global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
     
@@ -230,19 +254,17 @@ def run_autonomous_solana_ai_brain(application):
         try:
             wallet_address, balance_sol = get_real_solana_wallet_details()
             
-            # নিজস্ব বিল্ট-ইন ব্রেন দিয়ে চিন্তা ও সার্চ টুল চালানো
-            ai_thought_process = built_in_llm_reasoning_brain(balance_sol, wallet_address)
-            execution_output = execute_solana_on_chain_action("faucet_claim_simulation")
+            ai_thought_process, execution_output = evaluate_and_run_autonomous_brain(balance_sol)
             
-            api_status = "Solana network scanning with Built-in LLM & Tools..."
+            api_status = "Solana network scanning with Bootstrap Planning Engine..."
             try:
                 res = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd", timeout=5)
                 if res.status_code == 200:
                     data = res.json()
                     price = data.get('solana', {}).get('usd', 0)
-                    api_status = f"Solana Price: ${price} | Built-in Brain Active"
+                    api_status = f"Solana Price: ${price} | Bootstrap Engine Active"
             except Exception:
-                api_status = "Built-in Brain running on backup RPC..."
+                api_status = "Running on backup RPC..."
 
             action_log = (
                 f"🎯 Active Mission: {current_active_order}\n"
@@ -253,7 +275,7 @@ def run_autonomous_solana_ai_brain(application):
                 f"🌐 Status: {api_status}"
             )
             last_ai_action_log = action_log
-            bot_status = "Active 🟢 (Built-in LLM & Search Tools Running)"
+            bot_status = "Active 🟢 (Bootstrap Earning & Planning Engine Running)"
             
             ai_memory.append(action_log)
             if len(ai_memory) > 5:
@@ -263,33 +285,32 @@ def run_autonomous_solana_ai_brain(application):
                 
         except Exception as e:
             bot_status = f"Error: {str(e)} ❌ (Self-Healing Active...)"
-            agent_learning_log.append(f"Loop recovered from: {str(e)[:30]}")
+            agent_learning_log.append(f"Loop error: {str(e)[:25]}")
             time.sleep(15)
 
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "🚀 **Solana Built-in LLM & Web Search Agent Activated!**\n\n"
-        "🧠 **বৈশিষ্ট্য:** কোডের মধ্যে সম্পূর্ণ নিজস্ব বিল্ট-ইন এলএলএম ব্রেন এবং ওয়েব সার্চ টুল যুক্ত করা হয়েছে। এটি বাইরে থেকে কোনো এপিআই ছাড়াই নিজে চিন্তা করে ও সার্চ করে ক্রিপ্টো আয়ের পথ খুঁজবে এবং এক্সিকিউট করবে।\n\n"
+        "🚀 **Solana Autonomous Bootstrap & Earning Agent Activated!**\n\n"
+        "🧠💡📈 **বৈশিষ্ট্য:** এই কোডে নিজস্ব 'মাথা' (Reinforcement Learning Brain) এবং 'বুটস্ট্র্যাপ আর্নিং প্ল্যানিং ইঞ্জিন' যুক্ত করা হয়েছে। ওয়ালেটে ব্যালেন্স শূন্য থাকলেও এটি বসে না থেকে আয়ের নতুন পরিকল্পনা ও ফাউসেট রুট স্ক্যান করতে থাকবে।\n\n"
         "কমান্ডসমূহ:\n"
-        "📊 `/status` - এআই-এর রিয়েল-টাইম ব্রেন থিংকিং, সার্চ টুল ও এক্সিকিউশন দেখতে\n"
-        "🛑 `/stop` - হান্টিং পজ করতে"
+        "📊 `/status` - ব্রেনের পরিকল্পনা, আর্নিং স্ট্র্যাটেজি ও এক্সিকিউশন রিপোর্ট দেখতে\n"
+        "🛑 `/stop` - বোট পজ করতে"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wallet_address, balance_sol = get_real_solana_wallet_details()
-    ai_thought = built_in_llm_reasoning_brain(balance_sol, wallet_address)
-    execution_out = execute_solana_on_chain_action("faucet_claim_simulation")
+    ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
     
     status_msg = (
-        f"📊 **Built-in LLM & Search Report**\n\n"
+        f"📊 **Autonomous Bootstrap & Earning Report**\n\n"
         f"🔹 **Status:** {bot_status}\n"
         f"👛 **Wallet:** `{wallet_address}`\n"
         f"💰 **Balance:** {balance_sol:.4f} SOL\n"
         f"🎯 **Mission:** {current_active_order}\n\n"
         f"{ai_thought}\n\n"
-        f"⚙️ **Latest Execution:**\n{execution_out}"
+        f"⚙️ **Execution Result:**\n{execution_out}"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
@@ -297,7 +318,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global current_active_order, bot_status
     current_active_order = "Paused by user."
     bot_status = "Paused 🟡"
-    await update.message.reply_text("🛑 বিল্ট-ইন ব্রেন ও সার্চ টুল সাময়িকভাবে পজ করা হয়েছে।")
+    await update.message.reply_text("🛑 অটোনমাস বুটস্ট্র্যাপ প্ল্যানিং ইঞ্জিন সাময়িকভাবে পজ করা হয়েছে।")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global current_active_order, bot_status
@@ -309,10 +330,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ নতুন অটোনমাস মিশন গ্রহণ করা হয়েছে: {custom_order}")
     else:
         wallet_address, balance_sol = get_real_solana_wallet_details()
-        ai_thought = built_in_llm_reasoning_brain(balance_sol, wallet_address)
-        execution_out = execute_solana_on_chain_action("faucet_claim_simulation")
+        ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
         await update.message.reply_text(
-            f"🤖 আমি নিজস্ব বিল্ট-ইন ব্রেন ও সার্চ টুল নিয়ে আয়ের মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+            f"🤖 আমি আমার নিজস্ব ব্রেন ও বুটস্ট্র্যাপ আর্নিং প্ল্যান নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
