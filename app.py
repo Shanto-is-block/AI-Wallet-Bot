@@ -3,6 +3,7 @@ import time
 import threading
 import requests
 import json
+import asyncio
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -18,8 +19,7 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 এখানে আপনার যত খুশি ফ্রি জেমিনি এপিআই কি লিস্ট আকারে বসাতে পারেন।
-# যদি কোনো কি না থাকে বা ফাঁকা রাখেন (""), তবে সিস্টেম নিজে থেকেই ফলব্যাক মোডে কাজ করবে।
+# 👉 এখানে আপনার ফ্রি জেমিনি এপিআই কি লিস্ট আকারে রয়েছে।
 GEMINI_API_KEYS = [
     "AQ.Ab8RN6IbYudc3aFEJ7rsG8MbfZbdZkmvOYP1h-vBBkdhut4Wag",
     "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
@@ -161,14 +161,13 @@ def rule_based_fallback_brain(balance_sol, market_info):
         f"📊 **Market Report:** {market_info}\n"
         f"👛 **Wallet Balance:** {balance_sol} SOL\n"
         f"💡 **Strategic Advice:** {advice}\n"
-        f"*(নোট: এপিআই কি সংযুক্ত না থাকায় বা লিমি트 শেষ হওয়ায় ইন্টারনাল স্মার্ট এআই ইঞ্জিন এই ডিসিশন নিয়েছে)*"
+        f"*(নোট: এপিআই কি সংযুক্ত না থাকায় বা লিমিট শেষ হওয়ায় ইন্টারনাল স্মার্ট এআই ইঞ্জিন এই ডিসিশন নিয়েছে)*"
     )
 
 # --- Multi-Key Rotation Gemini Brain with Seamless Fallback ---
 def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
     global current_key_index
     
-    # যদি কোনো ভ্যালিড এপিআই কি না থাকে, তবে সরাসরি ইন্টারনাল ব্রেনে চলে যাবে
     valid_keys = [k for k in GEMINI_API_KEYS if k and "YOUR_" not in k]
     if not valid_keys:
         return rule_based_fallback_brain(balance_sol, market_info)
@@ -190,7 +189,6 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
 
     total_keys = len(valid_keys)
     
-    # লুপ চালিয়ে এক এক করে কি (Key) ট্রাই করা হবে
     for _ in range(total_keys):
         active_key = valid_keys[current_key_index % total_keys]
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={active_key}"
@@ -198,7 +196,6 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
         try:
             response = requests.post(url, json=payload, timeout=8)
             
-            # যদি এপিআই লিমিট শেষ হয় (429) বা অন্য কোনো কোটা এরর আসে, পরের কি-তে সুইচ করবে
             if response.status_code == 429 or response.status_code == 403:
                 current_key_index = (current_key_index + 1) % total_keys
                 continue
@@ -216,8 +213,6 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
             current_key_index = (current_key_index + 1) % total_keys
             continue
 
-    # যদি সবকটি কি-এর লিমিটই শেষ হয়ে যায়, তবে সিস্টেম ক্র্যাশ না করে স্মার্ট ইন্টারনাল ব্রেনে সুইচ করবে
-    print("⚠️ All Gemini API keys exhausted. Falling back to Smart Built-in AI Brain.")
     return rule_based_fallback_brain(balance_sol, market_info)
 
 # --- Autonomous Background Worker Loop ---
@@ -321,4 +316,14 @@ if __name__ == "__main__":
     ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, args=(app_telegram,), daemon=True)
     ai_brain_thread.start()
 
-    app_telegram.run_polling()
+    # 👉 ফিক্সড অ্যাসিনক্রোনাস ইভেন্ট লুপ হ্যান্ডলার (Render Status 1 Error Fix)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            pass
+        else:
+            app_telegram.run_polling()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        app_telegram.run_polling()
