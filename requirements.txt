@@ -1,5 +1,5 @@
-web3
-google-genai
-requests
 flask
 python-telegram-bot
+requests
+bip-utils
+solders
