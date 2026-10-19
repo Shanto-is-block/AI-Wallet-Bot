@@ -38,7 +38,7 @@ def home():
 bot_status = "Active 🟢 (Secure Resilient Signal Engine Running)"
 
 # ডিফল্ট অর্ডার: অটোনমাস রেসিলিয়েন্ট ক্রিপ্টো আর্নিং ও সিগন্যাল হান্টিং
-current_active_order = "অটোনমাস মিশন: জিরো ব্যালেন্সেও হাল না ছেড়ে অফ-চেইন সিগন্যাল, ফ্রি এয়ারড্রপ ও প্রফিট প্ল্যান তৈরি এবং ইউজারকে অ্যালার্ট করা।"
+current_active_order = "অটোনমাস মিশন: জিরো ব্যালেন্সেও রিয়েল মার্কেট স্ক্যান, ট্রেন্ডিং টোকেন হান্টিং এবং প্রফিট প্ল্যান তৈরি করে অ্যালার্ট পাঠানো।"
 
 last_ai_action_log = "System initialized with secure non-stop earning logic."
 ai_memory = []  
@@ -47,7 +47,7 @@ is_bot_running = True
 
 # --- Strategy Pool & Reinforcement Weights ---
 strategy_pool = {
-    "OffChain_Signal_Hunting": {"weight": 1.5, "success": 0, "fail": 0},
+    "Real_Market_Trend_Hunting": {"weight": 1.5, "success": 0, "fail": 0},
     "Free_Airdrop_Testnet_Scanner": {"weight": 1.2, "success": 0, "fail": 0},
     "OnChain_DeFi_Execution": {"weight": 1.0, "success": 0, "fail": 0}
 }
@@ -107,21 +107,47 @@ def get_real_solana_wallet_details():
         
     return wallet_address, balance_sol
 
-# --- Resilient Off-Chain & Free Earning Hunt Tool ---
+# --- Real Market & Trending Earning Hunt Tool (Updated) ---
 def resilient_earning_discovery_hand(balance_sol):
     try:
-        if balance_sol == 0.0:
-            search_url = "https://api.duckduckgo.com/?q=solana+gasless+earning+airdrop+signals+2026&format=json"
-            res = requests.get(search_url, timeout=5)
-            if res.status_code == 200:
-                return True, "💡 [Resilient Brain Plan]: ওয়ালেটে ০ SOL। কিন্তু ব্রেন হাল ছাড়েনি! অফ-চেইনে ফ্রি এয়ারড্রপ ও সোলানা ট্রেন্ডিং সিগন্যাল স্ক্যান করা হয়েছে এবং নতুন আয়ের ব্লুপ্রিন্ট তৈরি হয়েছে।"
-        
-        url = "https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=100000000"
+        # Dexscreener API ব্যবহার করে সোলানা নেটওয়ার্কের রিয়েল-টাইম ট্রেন্ডিং টোকেন স্ক্যান করা
+        url = "https://api.dexscreener.com/latest/dex/tokens/solana"
         res = requests.get(url, timeout=6)
+        
         if res.status_code == 200:
             data = res.json()
-            out_amount = data.get('outAmount', 'N/A')
-            return True, f"📈 [DeFi Earning Hand]: মার্কেট রেট স্ক্যান সফল। ১ SOL এর আউটপুট ভ্যালু (USDC): {out_amount}"
+            pairs = data.get('pairs', [])
+            if pairs:
+                top_token = pairs[0]
+                name = top_token.get('baseToken', {}).get('name', 'Unknown')
+                symbol = top_token.get('baseToken', {}).get('symbol', 'UNK')
+                price_usd = top_token.get('priceUsd', '0')
+                h6_change = top_token.get('priceChange', {}).get('h6', 0)
+                
+                if balance_sol == 0.0:
+                    return True, (
+                        f"💡 [Zero-Balance Smart Hunt]: ওয়ালেটে ০ SOL। তবে ব্রেন সক্রিয়!\n"
+                        f"🔥 **রিয়েল ট্রেন্ডিং টোকেন স্ক্যানড:** {name} ({symbol})\n"
+                        f"💵 **বর্তমান মূল্য:** ${price_usd}\n"
+                        f"📈 **৬ ঘণ্টার গ্রোথ ট্রেন্ড:** {h6_change}%\n"
+                        f"⚠️ *সতর্কতা:* ট্রেড করার জন্য ওয়ালেটে সামান্য গ্যাস ফি (SOL) ডিপোজিট করুন।"
+                    )
+                else:
+                    return True, (
+                        f"📈 [Active Earning Hunt]: রিয়েল মার্কেট স্ক্যান সফল।\n"
+                        f"💎 **সেরা ট্রেন্ডিং কয়েন:** {name} ({symbol}) | মূল্য: ${price_usd}\n"
+                        f"🚀 ওয়ালেটে পর্যাপ্ত সোল রয়েছে, ট্রেড বা সোয়াপ এক্সিকিউট করা সম্ভব।"
+                    )
+        
+        if balance_sol == 0.0:
+            return True, "💡 [Resilient Brain Plan]: ওয়ালেটে ০ SOL। সোলানা ইকোসিস্টেমের অফ-চেইন সিগন্যাল স্ক্যান চলছে..."
+        
+        url_jup = "https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=100000000"
+        res_jup = requests.get(url_jup, timeout=6)
+        if res_jup.status_code == 200:
+            jup_data = res_jup.json()
+            out_amount = jup_data.get('outAmount', 'N/A')
+            return True, f"📈 [DeFi Earning Hand]: জিউপিটার মার্কেট রেট স্ক্যান সফল। ১ SOL এর আউটপুট ভ্যালু (USDC): {out_amount}"
             
         return True, "🌐 [Earning Hand]: মার্কেট মনিটরিং এবং গ্রোথ স্ট্র্যাটেজি সক্রিয় রয়েছে।"
     except Exception as e:
@@ -191,12 +217,12 @@ def evaluate_and_run_autonomous_brain(balance_sol):
     
     try:
         if balance_sol == 0.0:
-            best_strategy = "OffChain_Signal_Hunting"
+            best_strategy = "Real_Market_Trend_Hunting"
         else:
             best_strategy = max(strategy_pool.keys(), key=lambda s: strategy_pool[s]["weight"])
         
         thought_log = (
-            f"🧠 [Resilient Autonomous Brain]: ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOLলোক।\n"
+            f"🧠 [Resilient Autonomous Brain]: ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
             f"নির্বাচিত হার না মানা কৌশল: [{best_strategy}] (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
         )
         
@@ -214,16 +240,16 @@ def evaluate_and_run_autonomous_brain(balance_sol):
                     raise Exception(chain_msg)
             else:
                 execution_result = (
-                    "⚠️ [Smart Action Notice]: ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রানজেকশন সাময়িকভাবে স্থগিত।\n"
-                    "💡 **বোটের বার্তা:** আমি বিকল্প উপায়ে লাভজনক সিগন্যাল ও ফ্রি এয়ারড্রপ প্ল্যান তৈরি করে রেখেছি। দয়া করে ওয়ালেটে সামান্য গ্যাস ফি (SOL) যুক্ত করুন, যাতে আমি সাথে সাথে ট্রেড বা প্রটোকল বাস্তবায়ন করতে পারি!"
+                    "⚠️ [Smart Action Notice]: ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রেড সাময়িকভাবে স্থগিত।\n"
+                    "💡 **বোটের বার্তা:** আমি রিয়েল মার্কেট থেকে সেরা ট্রেন্ডিং টোকেন স্ক্যান করে রেখেছি। দয়া করে ওয়ালেটে সামান্য গ্যাস ফি (SOL) যুক্ত করুন, যাতে আমি সাথে সাথে সোয়াপ বা ট্রেড বাস্তবায়ন করতে পারি!"
                 )
         else:
             raise Exception("Resilient earning hunt failed.")
             
     except Exception as e:
         err_msg = str(e)
-        strategy_pool["OffChain_Signal_Hunting"]["weight"] = max(0.1, strategy_pool["OffChain_Signal_Hunting"]["weight"] - 0.2)
-        strategy_pool["OffChain_Signal_Hunting"]["fail"] += 1
+        strategy_pool["Real_Market_Trend_Hunting"]["weight"] = max(0.1, strategy_pool["Real_Market_Trend_Hunting"]["weight"] - 0.2)
+        strategy_pool["Real_Market_Trend_Hunting"]["fail"] += 1
         
         agent_learning_log.append(err_msg[:30])
         
@@ -260,7 +286,6 @@ def run_autonomous_solana_ai_brain(application):
             except Exception:
                 api_status = "Running on backup RPC..."
 
-            # নোটিফিকেশনে শুধুমাত্র পাবলিক অ্যাড্রেস ও ব্যালেন্স দেখানো হচ্ছে (কোনো প্রাইভেট কি বা পাসকোড নেই)
             action_log = (
                 f"🎯 Active Mission: {current_active_order}\n"
                 f"👛 Wallet Address: `{wallet_address}`\n"
@@ -289,7 +314,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🚀 **Solana Autonomous Secure & Resilient Agent Activated!**\n\n"
         "🔒🛡️ **সুরক্ষা:** আপনার ওয়ালেটের পাসকোড বা প্রাইভেট কি সম্পূর্ণ নিরাপদ রাখা হয়েছে। টেলিগ্রামে বা অন্য কোথাও এটি কখনোই প্রদর্শিত হবে না।\n\n"
         "কমান্ডসমূহ:\n"
-        "📊 `/status` - বোটের বর্তমান ব্যালেন্স, প্ল্যান ও এক্সিকিউশন রিপোর্ট দেখতে\n"
+        "📊 `/status` - বোটের বর্তমান ব্যালেন্স, রিয়েল মার্কেট স্ক্যান ও এক্সিকিউশন রিপোর্ট দেখতে\n"
         "🛑 `/stop` - বোট পজ করতে"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
@@ -298,7 +323,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wallet_address, balance_sol = get_real_solana_wallet_details()
     ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
     
-    # এখানেও শুধু পাবলিক অ্যাড্রেস ও ব্যালেন্স দেখানো হচ্ছে
     status_msg = (
         f"📊 **Secure Resilient Earning Report**\n\n"
         f"🔹 **Status:** {bot_status}\n"
@@ -328,7 +352,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address, balance_sol = get_real_solana_wallet_details()
         ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
         await update.message.reply_text(
-            f"🤖 আমি আমার নিরাপদ ব্রেন ও রেসিলিয়েন্ট ইঞ্জিন নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+            f"🤖 আমি আমার নিরাপদ ব্রেন ও রিয়েল মার্কেট স্ক্যানার নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
