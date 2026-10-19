@@ -22,7 +22,7 @@ RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com"
 # যদি কোনো কি না থাকে বা ফাঁকা রাখেন (""), তবে সিস্টেম নিজে থেকেই ফলব্যাক মোডে কাজ করবে।
 GEMINI_API_KEYS = [
     "YOUR_FIRST_GEMINI_API_KEY",
-    "YOUR_SECOND_GEMINI_API_KEY",
+    "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
     "YOUR_THIRD_GEMINI_API_KEY"
 ]
 
