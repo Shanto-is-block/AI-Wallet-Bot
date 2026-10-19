@@ -2,7 +2,7 @@ import os
 import time
 import threading
 import requests
-from flask import Flask
+from flask import Flask, request as flask_request
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import transfer, TransferParams
@@ -33,10 +33,6 @@ SOLANA_RPC_URLS = [
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "🤖 Solana Autonomous Custom AI & Resilient Agent is Active!"
-
 # Global State and Autonomous Mind State
 bot_status = "Active 🟢 (Custom AI API & Resilient Engine Running)"
 current_active_order = "অটোনমাস মিশন: কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন ব্যবহার করে জিরো ব্যালেন্সেও সিগন্যাল ও প্রফিট প্ল্যান তৈরি করা।"
@@ -50,6 +46,80 @@ strategy_pool = {
     "OnChain_DeFi_Execution": {"weight": 1.0, "success": 0, "fail": 0}
 }
 
+# --- Send Telegram Message Helper ---
+def send_telegram_message(chat_id, text_message):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": text_message,
+            "parse_mode": "Markdown"
+        }
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Telegram Send Error: {e}")
+
+# --- Flask Route for Webhook / Home ---
+@app.route('/')
+def home():
+    return "🤖 Solana Autonomous Custom AI & Resilient Agent is Active!"
+
+# টেলিগ্রাম থেকে আপডেট রিসিভ করার জন্য ওয়েবহুক রুট
+@app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
+def telegram_webhook():
+    global current_active_order, bot_status
+    try:
+        data = flask_request.get_json()
+        if "message" in data:
+            message = data["message"]
+            chat_id = message["chat"]["id"]
+            text = message.get("text", "").strip()
+
+            if text.startswith("/start"):
+                welcome_text = (
+                    "🚀 *Solana Autonomous Custom AI Agent Activated!*\n\n"
+                    "🧠🔗🤖 *বৈশিষ্ট্য:* আপনার কাস্টম এআই এপিআই এবং রেসিলিয়েন্ট ইঞ্জিন সফলভাবে যুক্ত। ওয়ালেটে ব্যালেন্স শূন্য থাকলেও এটি অফ-চেইন সিগন্যাল ও আয়ের প্ল্যান তৈরি করবে।\n\n"
+                    "কমান্ডসমূহ:\n"
+                    "📊 `/status` - ব্রেনের পরিকল্পনা ও স্ট্যাটাস দেখতে\n"
+                    "🛑 `/stop` - বোট পজ করতে\n"
+                    "✍️ `Order: আপনার নির্দেশ` - নতুন মিশন সেট করতে"
+                )
+                send_telegram_message(chat_id, welcome_text)
+
+            elif text.startswith("/status"):
+                wallet_address, balance_sol = get_real_solana_wallet_details()
+                ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
+                status_msg = (
+                    f"📊 *Custom AI Earning Report*\n\n"
+                    f"🔹 *Status:* {bot_status}\n"
+                    f"👛 *Wallet Address:* `{wallet_address}`\n"
+                    f"💰 *Balance:* {balance_sol:.4f} SOL\n"
+                    f"🎯 *Mission:* {current_active_order}\n\n"
+                    f"{ai_thought}\n\n"
+                    f"⚙️ *Execution Result:*\n{execution_out}"
+                )
+                send_telegram_message(chat_id, status_msg)
+
+            elif text.startswith("/stop"):
+                current_active_order = "Paused by user."
+                bot_status = "Paused 🟡"
+                send_telegram_message(chat_id, "🛑 অটোনমাস কাস্টম এআই ইঞ্জিন সাময়িকভাবে পজ করা হয়েছে।")
+
+            elif text.lower().startswith("order:"):
+                custom_order = text[6:].strip()
+                current_active_order = custom_order
+                send_telegram_message(chat_id, f"✅ নতুন অটোনমাস মিশন গ্রহণ করা হয়েছে: {custom_order}")
+
+            else:
+                wallet_address, balance_sol = get_real_solana_wallet_details()
+                ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
+                reply_msg = f"🤖 আমি আমার কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+                send_telegram_message(chat_id, reply_msg)
+
+    except Exception as e:
+        print(f"Webhook Error: {e}")
+    return "OK", 200
+
 # --- Self-Ping Loop to Keep Render Awake ---
 def self_ping_worker():
     while True:
@@ -57,6 +127,17 @@ def self_ping_worker():
             time.sleep(480) 
             if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
                 requests.get(RENDER_APP_URL, timeout=10)
+        except Exception:
+            pass
+
+# --- Set Telegram Webhook Automatically ---
+def setup_telegram_webhook():
+    time.sleep(5) # সার্ভার ফুল স্টার্ট হওয়ার জন্য একটু সময় দেওয়া
+    if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
+        webhook_url = f"{RENDER_APP_URL}/{TELEGRAM_BOT_TOKEN}"
+        api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={webhook_url}"
+        try:
+            requests.get(api_url, timeout=10)
         except Exception:
             pass
 
@@ -105,19 +186,6 @@ def get_real_solana_wallet_details():
         
     return wallet_address, balance_sol
 
-# --- Send Telegram Alert Directly to User Chat ID ---
-def send_telegram_alert(message_text):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message_text,
-            "parse_mode": "Markdown"
-        }
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        print(f"Telegram Alert Error: {e}")
-
 # --- Custom AI API & Resilient Earning Hunt Tool ---
 def call_custom_ai_and_hunt(balance_sol):
     try:
@@ -134,16 +202,16 @@ def call_custom_ai_and_hunt(balance_sol):
         if res.status_code == 200:
             data = res.json()
             advice = data.get('advice', data.get('strategy_advice', 'কাস্টম এআই ব্রেন সফলভাবে সিগন্যাল ও ব্লুপ্রিন্ট তৈরি করেছে।'))
-            return True, f"🧠 [Custom AI API Brain]: {advice}"
+            return True, f"🧠 *[Custom AI API Brain]:* {advice}"
         else:
             if balance_sol == 0.0:
-                return True, "💡 [Resilient AI Plan]: ওয়ালেটে ০ SOL। কাস্টম এআই এবং অফ-চেইন ফ্রি এয়ারড্রপ সিগন্যাল স্ক্যান করে নতুন আয়ের ব্লুপ্রিন্ট তৈরি হয়েছে।"
+                return True, "💡 *[Resilient AI Plan]:* ওয়ালেটে ০ SOL। কাস্টম এআই এবং অফ-চেইন ফ্রি এয়ারড্রপ সিগন্যাল স্ক্যান করে নতুন আয়ের ব্লুপ্রিন্ট তৈরি হয়েছে।"
             else:
-                return True, "📈 [DeFi Earning Hand]: মার্কেট রেট ও কাস্টম এআই প্রটোকল স্ক্যান সফল।"
+                return True, "📈 *[DeFi Earning Hand]:* মার্কেট রেট ও কাস্টম এআই প্রটোকল স্ক্যান সফল।"
     except Exception as e:
         if balance_sol == 0.0:
-            return True, "💡 [Resilient Plan (Fallback)]: ওয়ালেটে ০ SOL। অফ-চেইনে সোলানা ট্রেন্ডিং সিগন্যাল ও ফ্রি ফাউসেট রুট স্ক্যান করা হয়েছে।"
-        return False, f"❌ [Custom AI API Error]: {str(e)[:30]}"
+            return True, "💡 *[Resilient Plan (Fallback)]* ওয়ালেটে ০ SOL। অফ-চেইনে সোলানা ট্রেন্ডিং সিগন্যাল ও ফ্রি ফাউসেট রুট স্ক্যান করা হয়েছে।"
+        return False, f"❌ *[Custom AI API Error]:* {str(e)[:30]}"
 
 # --- On-Chain Execution Tool ---
 def execute_on_chain_hand_tool(target_address=None, amount_sol=0.0):
@@ -191,14 +259,14 @@ def execute_on_chain_hand_tool(target_address=None, amount_sol=0.0):
             res = requests.post(SOLANA_RPC_URLS[0], json=broadcast_payload, timeout=8).json()
             
             if "result" in res:
-                return True, f"✅ [On-Chain Success] Transaction Sent! Signature: {res['result']}"
+                return True, f"✅ *[On-Chain Success]* Transaction Sent! Signature: {res['result']}"
             else:
                 raise Exception(f"RPC Reject: {res.get('error', 'Unknown error')}")
 
-        return True, "🎯 [On-Chain Execution]: কাস্টম এআই ও রেসিলিয়েন্ট আর্নিং প্ল্যান অনুযায়ী ব্লকচেইন প্রটোকল এক্সিকিউশন সফল।"
+        return True, "🎯 *[On-Chain Execution]:* কাস্টম এআই ও রেসিলিয়েন্ট আর্নিং প্ল্যান অনুযায়ী ব্লকচেইন প্রটোকল এক্সিকিউশন সফল।"
 
     except Exception as e:
-        return False, f"❌ [On-Chain Error]: {str(e)}"
+        return False, f"❌ *[On-Chain Error]:* {str(e)}"
 
 # --- Autonomous Brain & Custom AI Engine ---
 def evaluate_and_run_autonomous_brain(balance_sol):
@@ -213,8 +281,8 @@ def evaluate_and_run_autonomous_brain(balance_sol):
             best_strategy = max(strategy_pool.keys(), key=lambda s: strategy_pool[s]["weight"])
         
         thought_log = (
-            f"🧠 [Custom AI Autonomous Brain]: ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
-            f"নির্বাচিত কৌশল: [{best_strategy}] (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
+            f"🧠 *[Custom AI Autonomous Brain]* ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
+            f"নির্বাচিত কৌশল: `{best_strategy}` (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
         )
         
         ai_success, ai_msg = call_custom_ai_and_hunt(balance_sol)
@@ -225,19 +293,19 @@ def evaluate_and_run_autonomous_brain(balance_sol):
                 chain_success, chain_msg = execute_on_chain_hand_tool()
                 if chain_success:
                     strategy_pool[best_strategy]["weight"] += 0.1
-                    execution_result = f"✅ [Execution Success via {best_strategy}]: {chain_msg}"
+                    execution_result = f"✅ *[Execution Success via {best_strategy}]:* {chain_msg}"
                 else:
                     raise Exception(chain_msg)
             else:
                 execution_result = (
-                    "⚠️ [Smart Action Notice]: ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রানজেকশন সাময়িকভাবে স্থগিত।\n"
-                    "💡 **বোটের বার্তা:** আমার কাস্টম এআই এপিআই দিয়ে লাভজনক সিগন্যাল ও ফ্রি এয়ারড্রপ প্ল্যান তৈরি করে রেখেছি। দয়া করে ওয়ালেটে সামান্য গ্যাস ফি (SOL) যুক্ত করুন, যাতে আমি সাথে সাথে ট্রেড বা প্রটোকল বাস্তবায়ন করতে পারি!"
+                    "⚠️ *[Smart Action Notice]* ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রানজেকশন সাময়িকভাবে স্থগিত।\n"
+                    "💡 *বোটের বার্তা:* আমার কাস্টম এআই এপিআই দিয়ে লাভজনক সিগন্যাল ও ফ্রি এয়ারড্রপ প্ল্যান তৈরি করে রেখেছি। দয়া করে ওয়ালেটে সামান্য গ্যাস ফি (SOL) যুক্ত করুন, যাতে আমি সাথে সাথে ট্রেড বা প্রটোকল বাস্তবায়ন করতে পারি!"
                 )
         else:
             raise Exception("Custom AI API call failed.")
             
     except Exception as e:
-        execution_result = f"🔄 [Self-Healing Executed]: বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো। Error: {str(e)[:30]}"
+        execution_result = f"🔄 *[Self-Healing Executed]* বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো। Error: {str(e)[:30]}"
         
     return thought_log, execution_result
 
@@ -255,15 +323,15 @@ def run_autonomous_solana_ai_brain():
             ai_thought_process, execution_output = evaluate_and_run_autonomous_brain(balance_sol)
             
             action_log = (
-                f"🎯 Active Mission: {current_active_order}\n"
-                f"👛 Wallet Address: `{wallet_address}`\n"
-                f"💰 Balance: {balance_sol:.4f} SOL\n\n"
+                f"🎯 *Active Mission:* {current_active_order}\n"
+                f"👛 *Wallet Address:* `{wallet_address}`\n"
+                f"💰 *Balance:* {balance_sol:.4f} SOL\n\n"
                 f"{ai_thought_process}\n\n"
-                f"⚙️ **Execution Result:**\n{execution_output}"
+                f"⚙️ *Execution Result:*\n{execution_output}"
             )
             
-            # সার্ভার থেকে সরাসরি টেলিগ্রামে আপডেট পাঠিয়ে দেওয়া
-            send_telegram_alert(action_log)
+            # ব্যাকগ্রাউন্ড থেকে সরাসরি টেলিগ্রাম চ্যাট আইডিতে অ্যালার্ট পাঠানো
+            send_telegram_message(TELEGRAM_CHAT_ID, action_log)
             bot_status = "Active 🟢 (Custom AI API & Resilient Engine Running)"
             
             time.sleep(300) # প্রতি ৫ মিনিট পর পর অটোনমাস লুপ চলবে
@@ -272,18 +340,22 @@ def run_autonomous_solana_ai_brain():
             bot_status = f"Error: {str(e)} ❌"
             time.sleep(15)
 
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
 if __name__ == "__main__":
+    # ফ্লাস্ক সার্ভার ব্যাকগ্রাউন্ডে রান করা
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
+    # রেন্ডার সার্ভার জাগিয়ে রাখার জন্য সেলফ-পিং থ্রেড
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
+    # টেলিগ্রাম ওয়েবহুক অটো সেটআপ থ্রেড
+    webhook_thread = threading.Thread(target=setup_telegram_webhook, daemon=True)
+    webhook_thread.start()
+
+    # অটোনমাস এআই ব্রেন থ্রেড
     ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, daemon=True)
     ai_brain_thread.start()
 
-    # মূল ফ্লাস্ক সার্ভার সচল রাখা
+    # মূল ফ্লাস্ক অ্যাপ সচল রাখা
     flask_thread.join()
