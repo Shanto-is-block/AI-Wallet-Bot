@@ -1,6 +1,6 @@
-flask
-python-telegram-bot
+fastapi
+uvicorn
+pydantic
+transformers
+duckduckgo-search
 requests
-solders
-base58
-asyncio
