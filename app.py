@@ -12,8 +12,9 @@ from solders.transaction import Transaction
 from solders.message import Message
 import base58
 
-# --- Configuration ---
-TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
+# --- Configuration & Credentials ---
+TELEGRAM_BOT_TOKEN = "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA"      
+TELEGRAM_CHAT_ID = "7363218232"
 
 # আপনার সোলানা ওয়ালেটের প্রাইভেট কি (কোডের ভেতরে সুরক্ষিত থাকবে, টেলিগ্রাম বা কোথাও শো করবে না)
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
@@ -21,7 +22,7 @@ SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfk
 # আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্ক
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 আপনার কাস্টম এআই এপিআই কনফিগারেশন (ইউআরএল এবং কি সংযুক্ত)
+# 👉 কাস্টম এআই এপিআই কনফিগারেশন
 CUSTOM_AI_API_URL = "https://ai-api-cgzb.onrender.com"
 CUSTOM_AI_API_KEY = "ai_key_1762b5a10bdc7ed4a5db091d"
 
@@ -112,12 +113,21 @@ def get_real_solana_wallet_details():
         
     return wallet_address, balance_sol
 
+# --- Send Telegram Alert Directly to User Chat ID ---
+def send_telegram_alert(message_text):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message_text,
+            "parse_mode": "Markdown"
+        }
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Telegram Alert Error: {e}")
+
 # --- Custom AI API & Resilient Earning Hunt Tool ---
 def call_custom_ai_and_hunt(balance_sol):
-    """
-    আপনার নিজস্ব কাস্টম এআই এপিআই (https://ai-api-cgzb.onrender.com) এ রিকোয়েস্ট পাঠিয়ে 
-    বুদ্ধিমান সিগন্যাল ও আয়ের পরিকল্পনা জেনারেট করা।
-    """
     try:
         headers = {
             "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
@@ -128,20 +138,17 @@ def call_custom_ai_and_hunt(balance_sol):
             "mission": "Solana autonomous crypto earning and signal hunting"
         }
         
-        # আপনার কাস্টম এআই এপিআই এন্ডপয়েন্টে কল করা
         res = requests.post(CUSTOM_AI_API_URL, json=payload, headers=headers, timeout=6)
         if res.status_code == 200:
             data = res.json()
             advice = data.get('advice', data.get('strategy_advice', 'কাস্টম এআই ব্রেন সফলভাবে সিগন্যাল ও ব্লুপ্রিন্ট তৈরি করেছে।'))
             return True, f"🧠 [Custom AI API Brain]: {advice}"
         else:
-            # এপিআই রেসপন্স না পেলে ফলব্যাক বা ডিফল্ট রেসিলিয়েন্ট প্ল্যান
             if balance_sol == 0.0:
                 return True, "💡 [Resilient AI Plan]: ওয়ালেটে ০ SOL। কাস্টম এআই এবং অফ-চেইন ফ্রি এয়ারড্রপ সিগন্যাল স্ক্যান করে নতুন আয়ের ব্লুপ্রিন্ট তৈরি হয়েছে।"
             else:
                 return True, "📈 [DeFi Earning Hand]: মার্কেট রেট ও কাস্টম এআই প্রটোকল স্ক্যান সফল।"
     except Exception as e:
-        # কোনো কারণে এপিআই ডাউন থাকলে বোট যেন থেমে না যায় (Resilient Fallback)
         if balance_sol == 0.0:
             return True, "💡 [Resilient Plan (Fallback)]: ওয়ালেটে ০ SOL। অফ-চেইনে সোলানা ট্রেন্ডিং সিগন্যাল ও ফ্রি ফাউসেট রুট স্ক্যান করা হয়েছে।"
         return False, f"❌ [Custom AI API Error]: {str(e)[:30]}"
@@ -219,7 +226,6 @@ def evaluate_and_run_autonomous_brain(balance_sol):
             f"নির্বাচিত কৌশল: [{best_strategy}] (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
         )
         
-        # কাস্টম এআই এপিআই এবং হান্টিং টুল কল করা
         ai_success, ai_msg = call_custom_ai_and_hunt(balance_sol)
         thought_log += f"\n{ai_msg}"
         
@@ -280,7 +286,6 @@ def run_autonomous_solana_ai_brain(application):
             except Exception:
                 api_status = "Running on backup RPC..."
 
-            # নোটিফিকেশনে শুধুমাত্র পাবলিক অ্যাড্রেস ও ব্যালেন্স দেখানো হচ্ছে (প্রাইভেট কি বা পাসকোড সুরক্ষিত)
             action_log = (
                 f"🎯 Active Mission: {current_active_order}\n"
                 f"👛 Wallet Address: `{wallet_address}`\n"
@@ -296,6 +301,9 @@ def run_autonomous_solana_ai_brain(application):
             if len(ai_memory) > 5:
                 ai_memory.pop(0)
             
+            # ব্যাকগ্রাউন্ড লুপ থেকে সরাসরি আপনার চ্যাট আইডিতে আপডেট পাঠানো (অপশনাল অ্যালার্ট)
+            # send_telegram_alert(action_log)
+            
             time.sleep(120) 
                 
         except Exception as e:
@@ -307,7 +315,7 @@ def run_autonomous_solana_ai_brain(application):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "🚀 **Solana Autonomous Custom AI Agent Activated!**\n\n"
-        "🧠🔗🤖 **বৈশিষ্ট্য:** এই কোডে আপনার নিজস্ব কাস্টম এআই এপিআই (`https://ai-api-cgzb.onrender.com`) সফলভাবে যুক্ত করা হয়েছে। ওয়ালেটে ব্যালেন্স শূন্য থাকলেও এটি কাস্টম এআই এপিআই ব্যবহার করে অফ-চেইন সিগন্যাল ও আয়ের প্ল্যান তৈরি করবে।\n\n"
+        "🧠🔗🤖 **বৈশিষ্ট্য:** নতুন টেলিগ্রাম বট এবং কাস্টম এআই এপিআই (`https://ai-api-cgzb.onrender.com`) সফলভাবে যুক্ত করা হয়েছে।\n\n"
         "কমান্ডসমূহ:\n"
         "📊 `/status` - কাস্টম এআই ব্রেনের পরিকল্পনা ও এক্সিকিউশন রিপোর্ট দেখতে\n"
         "🛑 `/stop` - বোট পজ করতে"
@@ -347,7 +355,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address, balance_sol = get_real_solana_wallet_details()
         ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
         await update.message.reply_text(
-            f"🤖 আমি আমার কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+            f"🤖 আমি আমার নতুন টেলিগ্রাম বট ও কাস্টম এআই এপিআই নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
