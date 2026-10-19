@@ -2,6 +2,7 @@ import os
 import time
 import threading
 import requests
+import json
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -14,14 +15,19 @@ import base58
 
 # --- Configuration ---
 TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
-
-# আপনার সোলানা ওয়ালেটের প্রাইভেট কি (কোডের ভেতরে সুরক্ষিত থাকবে, টেলিগ্রাম বা কোথাও শো করবে না)
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
-
-# আপনার রেন্ডার ওয়েব সার্ভারের পাবলিক লিঙ্ক
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# Solana RPC URLs (সোলানা নেটওয়ার্কের রিয়েল নোড)
+# 👉 এখানে আপনার যত খুশি ফ্রি জেমিনি এপিআই কি লিস্ট আকারে বসাতে পারেন।
+# যদি কোনো কি না থাকে বা ফাঁকা রাখেন (""), তবে সিস্টেম নিজে থেকেই ফলব্যাক মোডে কাজ করবে।
+GEMINI_API_KEYS = [
+    "YOUR_FIRST_GEMINI_API_KEY",
+    "YOUR_SECOND_GEMINI_API_KEY",
+    "YOUR_THIRD_GEMINI_API_KEY"
+]
+
+current_key_index = 0
+
 SOLANA_RPC_URLS = [
     "https://api.mainnet-beta.solana.com",
     "https://solana-rpc.publicnode.com",
@@ -32,25 +38,14 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Solana Autonomous Secure & Resilient Agent is Active!"
+    return "🤖 Multi-Key Gemini AI Solana Autonomous Agent is Active!"
 
-# Global State and Autonomous Mind State
-bot_status = "Active 🟢 (Secure Resilient Signal Engine Running)"
-
-# ডিফল্ট অর্ডার: অটোনমাস রেসিলিয়েন্ট ক্রিপ্টো আর্নিং ও সিগন্যাল হান্টিং
-current_active_order = "অটোনমাস মিশন: জিরো ব্যালেন্সেও রিয়েল মার্কেট স্ক্যান, ট্রেন্ডিং টোকেন হান্টিং এবং প্রফিট প্ল্যান তৈরি করে অ্যালার্ট পাঠানো।"
-
-last_ai_action_log = "System initialized with secure non-stop earning logic."
+# Global State
+bot_status = "Active 🟢 (Multi-Key Rotation & Smart Fallback Engine Running)"
+current_active_order = "অটোনমাস মিশন: মাল্টি-এপিআই জেমিনি ব্রেনের মাধ্যমে রিয়েল মার্কেট স্ক্যান, ডিসিশন মেকিং এবং প্রফিট প্ল্যান তৈরি।"
+last_ai_action_log = "System initialized."
 ai_memory = []  
-agent_learning_log = [] 
 is_bot_running = True
-
-# --- Strategy Pool & Reinforcement Weights ---
-strategy_pool = {
-    "Real_Market_Trend_Hunting": {"weight": 1.5, "success": 0, "fail": 0},
-    "Free_Airdrop_Testnet_Scanner": {"weight": 1.2, "success": 0, "fail": 0},
-    "OnChain_DeFi_Execution": {"weight": 1.0, "success": 0, "fail": 0}
-}
 
 # --- Self-Ping Loop to Keep Render Awake ---
 def self_ping_worker():
@@ -62,7 +57,7 @@ def self_ping_worker():
         except Exception:
             pass
 
-# --- Solana Wallet Keypair from Private Key ---
+# --- Solana Wallet Keypair ---
 def get_solana_keypair():
     try:
         secret_key_bytes = base58.b58decode(SOLANA_PRIVATE_KEY_BASE58)
@@ -71,198 +66,161 @@ def get_solana_keypair():
         print(f"Keypair Error: {e}")
         return None
 
-# --- Real Solana RPC & Wallet Details Fetcher ---
-def get_real_solana_wallet_details():
-    wallet_address = "Not Connected"
-    balance_sol = 0.0
-    
+# --- TOOL 1: Get Wallet Details ---
+def get_wallet_details():
     try:
         keypair = get_solana_keypair()
         if not keypair:
-            return wallet_address, balance_sol
-            
+            return "Not Connected", 0.0
         wallet_address = str(keypair.pubkey())
-        
-        payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getBalance",
-            "params": [wallet_address]
-        }
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [wallet_address]}
         
         for rpc in SOLANA_RPC_URLS:
             try:
-                response = requests.post(rpc, json=payload, timeout=8)
+                response = requests.post(rpc, json=payload, timeout=6)
                 if response.status_code == 200:
                     data = response.json()
                     if "result" in data and "value" in data["result"]:
                         lamports = data["result"]["value"]
-                        balance_sol = float(lamports) / 1000000000.0 
-                        break
+                        return wallet_address, float(lamports) / 1000000000.0
             except Exception:
                 continue
-                
-    except Exception as e:
-        print(f"Solana RPC Error: {e}")
-        
-    return wallet_address, balance_sol
+        return wallet_address, 0.0
+    except Exception:
+        return "Error", 0.0
 
-# --- Real Market & Trending Earning Hunt Tool (Updated) ---
-def resilient_earning_discovery_hand(balance_sol):
+# --- TOOL 2: Fetch Market Trends (Dexscreener) ---
+def fetch_market_trends():
     try:
-        # Dexscreener API ব্যবহার করে সোলানা নেটওয়ার্কের রিয়েল-টাইম ট্রেন্ডিং টোকেন স্ক্যান করা
         url = "https://api.dexscreener.com/latest/dex/tokens/solana"
         res = requests.get(url, timeout=6)
-        
         if res.status_code == 200:
             data = res.json()
             pairs = data.get('pairs', [])
             if pairs:
-                top_token = pairs[0]
-                name = top_token.get('baseToken', {}).get('name', 'Unknown')
-                symbol = top_token.get('baseToken', {}).get('symbol', 'UNK')
-                price_usd = top_token.get('priceUsd', '0')
-                h6_change = top_token.get('priceChange', {}).get('h6', 0)
-                
-                if balance_sol == 0.0:
-                    return True, (
-                        f"💡 [Zero-Balance Smart Hunt]: ওয়ালেটে ০ SOL। তবে ব্রেন সক্রিয়!\n"
-                        f"🔥 **রিয়েল ট্রেন্ডিং টোকেন স্ক্যানড:** {name} ({symbol})\n"
-                        f"💵 **বর্তমান মূল্য:** ${price_usd}\n"
-                        f"📈 **৬ ঘণ্টার গ্রোথ ট্রেন্ড:** {h6_change}%\n"
-                        f"⚠️ *সতর্কতা:* ট্রেড করার জন্য ওয়ালেটে সামান্য গ্যাস ফি (SOL) ডিপোজিট করুন।"
-                    )
-                else:
-                    return True, (
-                        f"📈 [Active Earning Hunt]: রিয়েল মার্কেট স্ক্যান সফল।\n"
-                        f"💎 **সেরা ট্রেন্ডিং কয়েন:** {name} ({symbol}) | মূল্য: ${price_usd}\n"
-                        f"🚀 ওয়ালেটে পর্যাপ্ত সোল রয়েছে, ট্রেড বা সোয়াপ এক্সিকিউট করা সম্ভব।"
-                    )
-        
-        if balance_sol == 0.0:
-            return True, "💡 [Resilient Brain Plan]: ওয়ালেটে ০ SOL। সোলানা ইকোসিস্টেমের অফ-চেইন সিগন্যাল স্ক্যান চলছে..."
-        
-        url_jup = "https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=100000000"
-        res_jup = requests.get(url_jup, timeout=6)
-        if res_jup.status_code == 200:
-            jup_data = res_jup.json()
-            out_amount = jup_data.get('outAmount', 'N/A')
-            return True, f"📈 [DeFi Earning Hand]: জিউপিটার মার্কেট রেট স্ক্যান সফল। ১ SOL এর আউটপুট ভ্যালু (USDC): {out_amount}"
-            
-        return True, "🌐 [Earning Hand]: মার্কেট মনিটরিং এবং গ্রোথ স্ট্র্যাটেজি সক্রিয় রয়েছে।"
+                top = pairs[0]
+                name = top.get('baseToken', {}).get('name', 'Unknown')
+                symbol = top.get('baseToken', {}).get('symbol', 'UNK')
+                price = top.get('priceUsd', '0')
+                change = top.get('priceChange', {}).get('h6', 0)
+                return f"Top Trending Token: {name} ({symbol}) | Price: ${price} | 6h Change: {change}%"
+        return "Market data unavailable."
     except Exception as e:
-        return False, f"❌ [Resilient Scan Error]: {str(e)[:30]}"
+        return f"Market fetch error: {str(e)[:25]}"
 
-# --- On-Chain Execution Tool ---
-def execute_on_chain_hand_tool(target_address=None, amount_sol=0.0):
+# --- TOOL 3: On-Chain Guardrail Execution (Safety Limited) ---
+def execute_on_chain_transfer(target_address, amount_sol):
+    if amount_sol > 0.05:
+        return "❌ [Safety Guardrail Blocked]: সুরক্ষার স্বার্থে ০.০৫ SOL এর বেশি স্বয়ংক্রিয় ট্রান্সফার নিষিদ্ধ।"
+    
     try:
         keypair = get_solana_keypair()
         if not keypair:
-            return False, "❌ Keypair loading failed."
-
-        sender_pubkey = keypair.pubkey()
-
-        if target_address and amount_sol > 0:
-            lamports = int(amount_sol * 1000000000)
-            recipient_pubkey = Pubkey.from_string(target_address)
+            return "❌ Keypair error."
             
-            latest_blockhash_res = requests.post(
-                SOLANA_RPC_URLS[0], 
-                json={"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash", "params": []},
-                timeout=5
-            ).json()
-            blockhash_str = latest_blockhash_res['result']['value']['blockhash']
-            from solders.hash import Hash
-            recent_blockhash = Hash.from_string(blockhash_str)
+        lamports = int(amount_sol * 1000000000)
+        recipient_pubkey = Pubkey.from_string(target_address)
+        
+        latest_blockhash_res = requests.post(
+            SOLANA_RPC_URLS[0], 
+            json={"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash", "params": []},
+            timeout=5
+        ).json()
+        blockhash_str = latest_blockhash_res['result']['value']['blockhash']
+        from solders.hash import Hash
+        recent_blockhash = Hash.from_string(blockhash_str)
 
-            instruction = transfer(
-                TransferParams(
-                    from_pubkey=sender_pubkey,
-                    to_pubkey=recipient_pubkey,
-                    lamports=lamports
-                )
-            )
+        instruction = transfer(TransferParams(from_pubkey=keypair.pubkey(), to_pubkey=recipient_pubkey, lamports=lamports))
+        compile_message = Message.new_with_blockhash([instruction], keypair.pubkey(), recent_blockhash)
+        tx = Transaction.new_unsigned(compile_message)
+        tx.sign([keypair], recent_blockhash)
 
-            compile_message = Message.new_with_blockhash([instruction], sender_pubkey, recent_blockhash)
-            tx = Transaction.new_unsigned(compile_message)
-            tx.sign([keypair], recent_blockhash)
+        raw_tx = bytes(tx)
+        encoded_tx = base58.b58encode(raw_tx).decode('utf-8')
 
-            raw_tx = bytes(tx)
-            encoded_tx = base58.b58encode(raw_tx).decode('utf-8')
-
-            broadcast_payload = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "sendTransaction",
-                "params": [encoded_tx, {"encoding": "base58"}]
-            }
-            res = requests.post(SOLANA_RPC_URLS[0], json=broadcast_payload, timeout=8).json()
-            
-            if "result" in res:
-                return True, f"✅ [On-Chain Success] Transaction Sent! Signature: {res['result']}"
-            else:
-                raise Exception(f"RPC Reject: {res.get('error', 'Unknown error')}")
-
-        return True, "🎯 [On-Chain Execution]: রেসিলিয়েন্ট আর্নিং প্ল্যান অনুযায়ী ব্লকচেইন প্রটোকল এক্সিকিউশন সফল।"
-
-    except Exception as e:
-        return False, f"❌ [On-Chain Error]: {str(e)}"
-
-# --- Autonomous Brain & Resilient Planning Engine ---
-def evaluate_and_run_autonomous_brain(balance_sol):
-    global strategy_pool, agent_learning_log
-    
-    thought_log = ""
-    execution_result = ""
-    
-    try:
-        if balance_sol == 0.0:
-            best_strategy = "Real_Market_Trend_Hunting"
+        broadcast_payload = {"jsonrpc": "2.0", "id": 1, "method": "sendTransaction", "params": [encoded_tx, {"encoding": "base58"}]}
+        res = requests.post(SOLANA_RPC_URLS[0], json=broadcast_payload, timeout=8).json()
+        
+        if "result" in res:
+            return f"✅ [On-Chain Success] Tx Signature: {res['result']}"
         else:
-            best_strategy = max(strategy_pool.keys(), key=lambda s: strategy_pool[s]["weight"])
-        
-        thought_log = (
-            f"🧠 [Resilient Autonomous Brain]: ওয়ালেট ব্যালেন্স {balance_sol:.4f} SOL।\n"
-            f"নির্বাচিত হার না মানা কৌশল: [{best_strategy}] (Weight: {strategy_pool[best_strategy]['weight']:.2f})"
-        )
-        
-        hunt_success, hunt_msg = resilient_earning_discovery_hand(balance_sol)
-        thought_log += f"\n{hunt_msg}"
-        
-        if hunt_success:
-            if balance_sol > 0.0:
-                chain_success, chain_msg = execute_on_chain_hand_tool()
-                if chain_success:
-                    strategy_pool[best_strategy]["weight"] += 0.1
-                    strategy_pool[best_strategy]["success"] += 1
-                    execution_result = f"✅ [Execution Success via {best_strategy}]: {chain_msg}"
-                else:
-                    raise Exception(chain_msg)
-            else:
-                execution_result = (
-                    "⚠️ [Smart Action Notice]: ওয়ালেটে গ্যাস ফি (SOL) না থাকায় অন-চেইন ট্রেড সাময়িকভাবে স্থগিত।\n"
-                    "💡 **বোটের বার্তা:** আমি রিয়েল মার্কেট থেকে সেরা ট্রেন্ডিং টোকেন স্ক্যান করে রেখেছি। দয়া করে ওয়ালেটে সামান্য গ্যাস ফি (SOL) যুক্ত করুন, যাতে আমি সাথে সাথে সোয়াপ বা ট্রেড বাস্তবায়ন করতে পারি!"
-                )
-        else:
-            raise Exception("Resilient earning hunt failed.")
-            
+            return f"❌ RPC Error: {res.get('error', 'Unknown')}"
     except Exception as e:
-        err_msg = str(e)
-        strategy_pool["Real_Market_Trend_Hunting"]["weight"] = max(0.1, strategy_pool["Real_Market_Trend_Hunting"]["weight"] - 0.2)
-        strategy_pool["Real_Market_Trend_Hunting"]["fail"] += 1
-        
-        agent_learning_log.append(err_msg[:30])
-        
-        fallback_strategy = min(strategy_pool.keys(), key=lambda s: strategy_pool[s]["fail"])
-        thought_log += f"\n⚠️ [Self-Correction Triggered]: ফেইল করায় ব্রেন বিকল্প স্ট্র্যাটেজি [{fallback_strategy}] এ সুইচ করেছে।"
-        execution_result = f"🔄 [Self-Healing Executed]: বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো।"
-        
-    if len(agent_learning_log) > 0:
-        thought_log += f"\n💡 [Self-Learning Applied]: পূর্বের অভিজ্ঞতা থেকে ব্রেন তার আয়ের লজিক আরও শাণিত করেছে।"
-        
-    return thought_log, execution_result
+        return f"❌ Execution Exception: {str(e)}"
 
-# --- Autonomous Background Worker ---
+# --- Smart Internal AI Brain (এপিআই না থাকলেও কাজ করবে) ---
+def rule_based_fallback_brain(balance_sol, market_info):
+    advice = ""
+    if balance_sol == 0.0:
+        advice = "💡 ওয়ালেটে ০ SOL রয়েছে। গ্যাস ফি যুক্ত না করা পর্যন্ত অন-চেইন ট্রেড স্থগিত রাখা নিরাপদ। তবে রিয়েল মার্কেট স্ক্যান ও সিগন্যাল হান্টিং চালু আছে।"
+    else:
+        advice = f"🚀 ওয়ালেটে পর্যাপ্ত ফান্ড ({balance_sol} SOL) রয়েছে। ট্রেন্ডিং টোকেন সোয়াপ বা হোল্ড করার জন্য অনুকূল পরিবেশ।"
+        
+    return (
+        f"🧠 **[Smart Built-in AI Brain Active]:**\n"
+        f"📊 **Market Report:** {market_info}\n"
+        f"👛 **Wallet Balance:** {balance_sol} SOL\n"
+        f"💡 **Strategic Advice:** {advice}\n"
+        f"*(নোট: এপিআই কি সংযুক্ত না থাকায় বা লিমি트 শেষ হওয়ায় ইন্টারনাল স্মার্ট এআই ইঞ্জিন এই ডিসিশন নিয়েছে)*"
+    )
+
+# --- Multi-Key Rotation Gemini Brain with Seamless Fallback ---
+def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
+    global current_key_index
+    
+    # যদি কোনো ভ্যালিড এপিআই কি না থাকে, তবে সরাসরি ইন্টারনাল ব্রেনে চলে যাবে
+    valid_keys = [k for k in GEMINI_API_KEYS if k and "YOUR_" not in k]
+    if not valid_keys:
+        return rule_based_fallback_brain(balance_sol, market_info)
+
+    prompt = f"""
+    You are an autonomous crypto AI agent managing a Solana wallet.
+    Current Mission: {user_order}
+    Wallet Address: {wallet_address}
+    Wallet Balance: {balance_sol} SOL
+    Market Info: {market_info}
+    
+    Analyze the situation using ReAct (Thought -> Plan -> Action format) in Bengali.
+    Provide smart insights, whether to hold, hunt tokens, or wait for gas fee if balance is 0. Keep it professional and strategic.
+    """
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+
+    total_keys = len(valid_keys)
+    
+    # লুপ চালিয়ে এক এক করে কি (Key) ট্রাই করা হবে
+    for _ in range(total_keys):
+        active_key = valid_keys[current_key_index % total_keys]
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={active_key}"
+        
+        try:
+            response = requests.post(url, json=payload, timeout=8)
+            
+            # যদি এপিআই লিমিট শেষ হয় (429) বা অন্য কোনো কোটা এরর আসে, পরের কি-তে সুইচ করবে
+            if response.status_code == 429 or response.status_code == 403:
+                current_key_index = (current_key_index + 1) % total_keys
+                continue
+                
+            if response.status_code == 200:
+                res_json = response.json()
+                candidate = res_json.get('candidates', [])
+                if candidate:
+                    text_output = candidate[0]['content']['parts'][0]['text']
+                    return f"🧠 **[Gemini AI Active Brain (Key #{current_key_index + 1})]:**\n{text_output}"
+            
+            current_key_index = (current_key_index + 1) % total_keys
+            
+        except Exception:
+            current_key_index = (current_key_index + 1) % total_keys
+            continue
+
+    # যদি সবকটি কি-এর লিমিটই শেষ হয়ে যায়, তবে সিস্টেম ক্র্যাশ না করে স্মার্ট ইন্টারনাল ব্রেনে সুইচ করবে
+    print("⚠️ All Gemini API keys exhausted. Falling back to Smart Built-in AI Brain.")
+    return rule_based_fallback_brain(balance_sol, market_info)
+
+# --- Autonomous Background Worker Loop ---
 def run_autonomous_solana_ai_brain(application):
     global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
     
@@ -272,30 +230,19 @@ def run_autonomous_solana_ai_brain(application):
             continue
             
         try:
-            wallet_address, balance_sol = get_real_solana_wallet_details()
+            wallet_address, balance_sol = get_wallet_details()
+            market_info = fetch_market_trends()
             
-            ai_thought_process, execution_output = evaluate_and_run_autonomous_brain(balance_sol)
-            
-            api_status = "Solana network scanning with Resilient Engine..."
-            try:
-                res = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd", timeout=5)
-                if res.status_code == 200:
-                    data = res.json()
-                    price = data.get('solana', {}).get('usd', 0)
-                    api_status = f"Solana Price: ${price} | Resilient Engine Active"
-            except Exception:
-                api_status = "Running on backup RPC..."
+            ai_thought_process = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
 
             action_log = (
-                f"🎯 Active Mission: {current_active_order}\n"
-                f"👛 Wallet Address: `{wallet_address}`\n"
-                f"💰 Balance: {balance_sol:.4f} SOL\n"
-                f"{ai_thought_process}\n"
-                f"⚙️ **Execution Result:**\n{execution_output}\n"
-                f"🌐 Status: {api_status}"
+                f"🎯 **Mission:** {current_active_order}\n"
+                f"👛 **Wallet:** `{wallet_address}`\n"
+                f"💰 **Balance:** {balance_sol:.4f} SOL\n\n"
+                f"{ai_thought_process}"
             )
             last_ai_action_log = action_log
-            bot_status = "Active 🟢 (Secure Resilient Signal Engine Running)"
+            bot_status = "Active 🟢 (Multi-Key Rotation & Smart Engine Healthy)"
             
             ai_memory.append(action_log)
             if len(ai_memory) > 5:
@@ -304,55 +251,54 @@ def run_autonomous_solana_ai_brain(application):
             time.sleep(120) 
                 
         except Exception as e:
-            bot_status = f"Error: {str(e)} ❌ (Self-Healing Active...)"
-            agent_learning_log.append(f"Loop error: {str(e)[:25]}")
+            bot_status = f"Error: {str(e)[:30]} ❌ (Self-Healing Active)"
             time.sleep(15)
 
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "🚀 **Solana Autonomous Secure & Resilient Agent Activated!**\n\n"
-        "🔒🛡️ **সুরক্ষা:** আপনার ওয়ালেটের পাসকোড বা প্রাইভেট কি সম্পূর্ণ নিরাপদ রাখা হয়েছে। টেলিগ্রামে বা অন্য কোথাও এটি কখনোই প্রদর্শিত হবে না।\n\n"
+    await update.message.reply_text(
+        "🚀 **Multi-Key Gemini AI Autonomous Solana Agent Activated!**\n\n"
+        "🔒 আপনার প্রাইভেট কি নিরাপদ। বোটটি এখন একাধিক এপিআই কি রোটেশন এবং স্মার্ট ফলব্যাক ইঞ্জিন নিয়ে সচল রয়েছে।\n\n"
         "কমান্ডসমূহ:\n"
-        "📊 `/status` - বোটের বর্তমান ব্যালেন্স, রিয়েল মার্কেট স্ক্যান ও এক্সিকিউশন রিপোর্ট দেখতে\n"
-        "🛑 `/stop` - বোট পজ করতে"
+        "📊 `/status` - এআই অ্যানালাইসিস ও মার্কেট রিপোর্ট দেখতে\n"
+        "🛑 `/stop` - বোট পজ করতে",
+        parse_mode="Markdown"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    wallet_address, balance_sol = get_real_solana_wallet_details()
-    ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
+    wallet_address, balance_sol = get_wallet_details()
+    market_info = fetch_market_trends()
+    ai_thought = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
     
     status_msg = (
-        f"📊 **Secure Resilient Earning Report**\n\n"
+        f"📊 **AI Agent Live Status Report**\n\n"
         f"🔹 **Status:** {bot_status}\n"
-        f"👛 **Wallet Address:** `{wallet_address}`\n"
+        f"👛 **Wallet:** `{wallet_address}`\n"
         f"💰 **Balance:** {balance_sol:.4f} SOL\n"
         f"🎯 **Mission:** {current_active_order}\n\n"
-        f"{ai_thought}\n\n"
-        f"⚙️ **Execution Result:**\n{execution_out}"
+        f"{ai_thought}"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global current_active_order, bot_status
-    current_active_order = "Paused by user."
+    current_active_order = "Paused by user. Use 'Order:' to resume."
     bot_status = "Paused 🟡"
     await update.message.reply_text("🛑 অটোনমাস ইঞ্জিন সাময়িকভাবে পজ করা হয়েছে।")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global current_active_order, bot_status
+    global current_active_order
     user_text = update.message.text.strip()
     
     if user_text.lower().startswith("order:"):
-        custom_order = user_text[6:].strip()
-        current_active_order = custom_order
-        await update.message.reply_text(f"✅ নতুন অটোনমাস মিশন গ্রহণ করা হয়েছে: {custom_order}")
+        current_active_order = user_text[6:].strip()
+        await update.message.reply_text(f"✅ নতুন এআই মিশন সেট করা হয়েছে: {current_active_order}")
     else:
-        wallet_address, balance_sol = get_real_solana_wallet_details()
-        ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
+        wallet_address, balance_sol = get_wallet_details()
+        market_info = fetch_market_trends()
+        ai_thought = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
         await update.message.reply_text(
-            f"🤖 আমি আমার নিরাপদ ব্রেন ও রিয়েল মার্কেট স্ক্যানার নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+            f"🤖 এআই এজেন্ট আপনার বার্তা বিশ্লেষণ করেছে:\n\n{ai_thought}\n\nনতুন নির্দেশ দিতে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
