@@ -1,364 +1,194 @@
-import os
-import time
+from fastapi import FastAPI, Header, HTTPException, Depends
+from pydantic import BaseModel
+from transformers import pipeline
+from duckduckgo_search import DDGS
 import threading
+import time
 import requests
-import json
-import asyncio
-from flask import Flask
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-from solders.keypair import Keypair
-from solders.pubkey import Pubkey
-from solders.system_program import transfer, TransferParams
-from solders.transaction import VersionedTransaction
-from solders.message import Message
-import base58
+import secrets
+import os
+import uvicorn
 
-# --- Configuration ---
-TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"      
-SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
-RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
+app = FastAPI(title="Smart AI Data Analyst & Autonomous API", version="8.0")
 
-# 👉 আপনার দেওয়া OpenRouter API Key এখানে সেট করা হয়েছে
-OPENROUTER_API_KEYS = [
-    "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"
-]
+# টেলিগ্রাম কনফিগারেশন
+TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
+ADMIN_TELEGRAM_ID = 7363218232
 
-current_key_index = 0
+# ভ্যালিড এপিআই কি-গুলোর তালিকা (আপনার দেওয়া নতুন কি সহ)
+VALID_API_KEYS = {
+    os.getenv("MY_CUSTOM_API_KEY", "my-secret-solana-ai-key-12345"),
+    "ai_key_1762b5a10bdc7ed4a5db091d"  # আপনার জেনারেট করা নির্দিষ্ট এপিআই কি
+}
 
-SOLANA_RPC_URLS = [
-    "https://api.mainnet-beta.solana.com",
-    "https://solana-rpc.publicnode.com",
-    "https://rpc.ankr.com/solana"
-]
+# চ্যাট মেমোরি স্টোর করার জন্য ডিকশনারি (Short-term Memory)
+CHAT_HISTORIES = {}
 
-app = Flask(__name__)
+# Hugging Face থেকে হালকা মডেল লোড করা (সেলফ-রিকভারি ট্রাই-ক্যাচ সহ)
+print("Loading AI LLM Brain...")
+try:
+    llm_brain = pipeline("text2text-generation", model="google/flan-t5-small")
+    print("LLM Brain Loaded Successfully!")
+except Exception as e:
+    print(f"Model Load Warning: {e}")
+    llm_brain = None
 
-@app.route('/')
-def home():
-    return "🤖 Autonomous Crypto AI Trading Agent (OpenRouter & Jupiter DEX Enabled) is Active!"
 
-# Global State
-bot_status = "Active 🟢 (OpenRouter AI & Jupiter DEX Trading Engine Running)"
-current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, OpenRouter AI ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
-last_ai_action_log = "System initialized."
-ai_memory = []  
-is_bot_running = True
-
-# --- Self-Ping Loop to Keep Render Awake ---
-def self_ping_worker():
-    while True:
+# --- সেলফ-রিকভারিং এআই অ্যানালিসিস লজিক ---
+def run_ai_analysis(chat_id: int, query: str) -> str:
+    try:
+        # মেমোরি থেকে পূর্বের ইতিহাস যুক্ত করা
+        history = CHAT_HISTORIES.get(chat_id, [])
+        history_text = "\n".join([f"Q: {h['q']}\nA: {h['a']}" for h in history[-2:]]) # শেষ ২ টি চ্যাট মনে রাখবে
+        
+        # ইন্টারনেট সার্চ উইথ সেলফ রিকভারি/ফলব্যাক
+        search_results = []
         try:
-            time.sleep(480) 
-            if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
-                requests.get(RENDER_APP_URL, timeout=10)
-        except Exception:
-            pass
-
-# --- Solana Wallet Keypair ---
-def get_solana_keypair():
-    try:
-        secret_key_bytes = base58.b58decode(SOLANA_PRIVATE_KEY_BASE58)
-        return Keypair.from_bytes(secret_key_bytes)
-    except Exception as e:
-        print(f"Keypair Error: {e}")
-        return None
-
-# --- TOOL 1: Get Wallet Details ---
-def get_wallet_details():
-    try:
-        keypair = get_solana_keypair()
-        if not keypair:
-            return "Not Connected", 0.0
-        wallet_address = str(keypair.pubkey())
-        payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [wallet_address]}
+            with DDGS() as ddgs:
+                search_results = [r for r in ddgs.text(query, max_results=2)]
+        except Exception as search_err:
+            print(f"Search warning (Self-recovered): {search_err}")
         
-        for rpc in SOLANA_RPC_URLS:
-            try:
-                response = requests.post(rpc, json=payload, timeout=6)
-                if response.status_code == 200:
-                    data = response.json()
-                    if "result" in data and "value" in data["result"]:
-                        lamports = data["result"]["value"]
-                        return wallet_address, float(lamports) / 1000000000.0
-            except Exception:
-                continue
-        return wallet_address, 0.0
-    except Exception:
-        return "Error", 0.0
-
-# --- TOOL 2: Fetch Market Trends (Dexscreener) ---
-def fetch_market_trends():
-    try:
-        url = "https://api.dexscreener.com/latest/dex/tokens/solana"
-        res = requests.get(url, timeout=6)
-        if res.status_code == 200:
-            data = res.json()
-            pairs = data.get('pairs', [])
-            if pairs:
-                top = pairs[0]
-                name = top.get('baseToken', {}).get('name', 'Unknown')
-                symbol = top.get('baseToken', {}).get('symbol', 'UNK')
-                price = top.get('priceUsd', '0')
-                change = top.get('priceChange', {}).get('h6', 0)
-                mint_address = top.get('baseToken', {}).get('address', '')
-                return f"Top Trending: {name} ({symbol}) | Mint: `{mint_address}` | Price: ${price} | 6h Change: {change}%"
-        return "Market data unavailable."
-    except Exception as e:
-        return f"Market fetch error: {str(e)[:25]}"
-
-# --- TOOL 3: Automated Token Swap via Jupiter DEX ---
-def execute_jupiter_swap(output_mint, amount_sol):
-    if amount_sol > 0.02:
-        return "❌ [Safety Guardrail Blocked]: সুরক্ষার স্বার্থে একবারে ০.০২ SOL এর বেশি অটো-ট্রেড নিষিদ্ধ।"
-    
-    try:
-        keypair = get_solana_keypair()
-        if not keypair:
-            return "❌ Keypair error."
-            
-        input_mint = "So11111111111111111111111111111111111111112" # Wrapped SOL
-        lamports = int(amount_sol * 1000000000)
-        
-        quote_url = f"https://quote-jup.ag/v6/quote?inputMint={input_mint}&outputMint={output_mint}&amount={lamports}&slippageBps=150"
-        quote_res = requests.get(quote_url, timeout=8)
-        if quote_res.status_code != 200:
-            return f"❌ Jupiter Quote Error: {quote_res.text[:100]}"
-        
-        quote_data = quote_res.json()
-        
-        swap_url = "https://quote-jup.ag/v6/swap"
-        payload = {
-            "quoteResponse": quote_data,
-            "userPublicKey": str(keypair.pubkey()),
-            "wrapAndUnwrapSol": True
-        }
-        swap_res = requests.post(swap_url, json=payload, timeout=8)
-        if swap_res.status_code != 200:
-            return f"❌ Jupiter Swap API Error: {swap_res.text[:100]}"
-            
-        swap_data = swap_res.json()
-        swap_transaction_base64 = swap_data.get("swapTransaction")
-        
-        raw_tx_bytes = base58.b58decode(swap_transaction_base64)
-        tx = VersionedTransaction.from_bytes(raw_tx_bytes)
-        
-        signature = keypair.sign_message(bytes(tx.message))
-        signed_tx = VersionedTransaction.populate(tx.message, [signature])
-        
-        encoded_tx = base58.b58encode(bytes(signed_tx)).decode('utf-8')
-        
-        broadcast_payload = {
-            "jsonrpc": "2.0", 
-            "id": 1, 
-            "method": "sendTransaction", 
-            "params": [encoded_tx, {"encoding": "base58", "maxRetries": 3}]
-        }
-        
-        res = requests.post(SOLANA_RPC_URLS[0], json=broadcast_payload, timeout=10).json()
-        
-        if "result" in res:
-            return f"✅ [Auto-Trade Success] Swap Executed! Tx Signature: `{res['result']}`"
+        combined_data = ""
+        if search_results:
+            for i, res in enumerate(search_results):
+                combined_data += f"Source {i+1}: {res.get('title', '')} - {res.get('body', '')}\n"
         else:
-            return f"❌ RPC Broadcast Error: {res.get('error', 'Unknown')}"
-            
-    except Exception as e:
-        return f"❌ Swap Execution Exception: {str(e)}"
-
-# --- Smart Fallback Brain ---
-def rule_based_fallback_brain(balance_sol, market_info):
-    advice = "💡 ওয়ালেটে পর্যাপ্ত ফান্ড রয়েছে বা মার্কেট স্ক্যান চলছে।" if balance_sol > 0 else "💡 ওয়ালেটে ০ SOL রয়েছে। গ্যাস ফি যুক্ত করুন।"
-    return (
-        f"🧠 **[Smart Built-in AI Brain Active]:**\n"
-        f"📊 **Market Report:** {market_info}\n"
-        f"👛 **Wallet Balance:** {balance_sol} SOL\n"
-        f"💡 **Strategic Advice:** {advice}\n"
-        f"*(নোট: এপিআই সাময়িকভাবে ব্যস্ত থাকায় ফলব্যাক ইঞ্জিন এই ডিসিশন নিয়েছে)*"
-    )
-
-# --- OpenRouter AI Brain Integration ---
-def ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, user_order):
-    global current_key_index
-    
-    valid_keys = [k for k in OPENROUTER_API_KEYS if k and "YOUR_" not in k]
-    if not valid_keys:
-        return rule_based_fallback_brain(balance_sol, market_info)
-
-    prompt = f"""
-    You are an autonomous crypto AI trading agent managing a Solana wallet.
-    Current Mission: {user_order}
-    Wallet Address: {wallet_address}
-    Wallet Balance: {balance_sol} SOL
-    Market Info: {market_info}
-    
-    Analyze the market trends and decide whether conditions are optimal to trigger a buy/swap or hold. Provide strategic insights and answers clearly in Bengali.
-    """
-
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    
-    total_keys = len(valid_keys)
-    for _ in range(total_keys):
-        active_key = valid_keys[current_key_index % total_keys]
+            combined_data = "No live web data found, using internal reasoning."
         
-        headers = {
-            "Authorization": f"Bearer {active_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://ai-wallet-bot.onrender.com", # ঐচ্ছিক: OpenRouter র‍্যাঙ্কিংয়ের জন্য
-            "X-Title": "Solana AI Trading Bot"
-        }
-        
-        payload = {
-            "model": "deepseek/deepseek-chat:free",  # অথবা openrouter-এর অন্য যেকোনো ফ্রি মডেল ব্যবহার করতে পারেন
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.7
-        }
-        
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=12)
-            
-            if response.status_code in [429, 403, 401]:
-                current_key_index = (current_key_index + 1) % total_keys
-                continue
-                
-            if response.status_code == 200:
-                res_json = response.json()
-                choices = res_json.get('choices', [])
-                if choices:
-                    text_output = choices[0]['message']['content']
-                    return f"🧠 **[OpenRouter AI Trading Brain]:**\n{text_output}"
-            
-            current_key_index = (current_key_index + 1) % total_keys
-        except Exception:
-            current_key_index = (current_key_index + 1) % total_keys
-            continue
-
-    return rule_based_fallback_brain(balance_sol, market_info)
-
-# --- Autonomous Background Worker Loop ---
-def run_autonomous_solana_ai_brain(application):
-    global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
-    
-    while True:
-        if not is_bot_running:
-            time.sleep(5)
-            continue
-            
-        try:
-            wallet_address, balance_sol = get_wallet_details()
-            market_info = fetch_market_trends()
-            
-            ai_thought_process = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
-
-            action_log = (
-                f"🎯 **Mission:** {current_active_order}\n"
-                f"👛 **Wallet:** `{wallet_address}`\n"
-                f"💰 **Balance:** {balance_sol:.4f} SOL\n\n"
-                f"{ai_thought_process}"
-            )
-            last_ai_action_log = action_log
-            bot_status = "Active 🟢 (OpenRouter AI & Auto-DEX Trading Engine Healthy)"
-            
-            ai_memory.append(action_log)
-            if len(ai_memory) > 5:
-                ai_memory.pop(0)
-            
-            time.sleep(180) 
-                
-        except Exception as e:
-            bot_status = f"Error: {str(e)[:30]} ❌"
-            time.sleep(15)
-
-# --- Telegram Command Handlers ---
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🚀 **Autonomous Crypto Trading Agent Activated (Powered by OpenRouter AI)!**\n\n"
-        "📈 OpenRouter AI এবং জুপিটার ডিইএক্স (Jupiter DEX) সফলভাবে সংযুক্ত রয়েছে।\n\n"
-        "কমান্ডসমূহ:\n"
-        "📊 `/status` - লাইভ এআই অ্যানালাইসিস ও ব্যালেন্স দেখতে\n"
-        "⚡ `Buy <Token_Mint> <Amount>` - নির্দিষ্ট টোকেন কিনতে\n"
-        "🛑 `/stop` - বোট পজ করতে",
-        parse_mode="Markdown"
-    )
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    wallet_address, balance_sol = get_wallet_details()
-    market_info = fetch_market_trends()
-    ai_thought = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
-    
-    status_msg = (
-        f"📊 **AI Autonomous Trading Live Status**\n\n"
-        f"🔹 **Status:** {bot_status}\n"
-        f"👛 **Wallet:** `{wallet_address}`\n"
-        f"💰 **Balance:** {balance_sol:.4f} SOL\n"
-        f"🎯 **Mission:** {current_active_order}\n\n"
-        f"{ai_thought}"
-    )
-    await update.message.reply_text(status_msg, parse_mode="Markdown")
-
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global current_active_order, bot_status
-    current_active_order = "Paused by user."
-    bot_status = "Paused 🟡"
-    await update.message.reply_text("🛑 অটোনমাস ট্রেডিং ইঞ্জিন সাময়িকভাবে পজ করা হয়েছে।")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global current_active_order
-    user_text = update.message.text.strip()
-    
-    if user_text.lower().startswith("order:"):
-        current_active_order = user_text[6:].strip()
-        await update.message.reply_text(f"✅ নতুন এআই মিশন সেট করা হয়েছে: {current_active_order}")
-        
-    elif user_text.lower().startswith("buy "):
-        parts = user_text.split()
-        if len(parts) >= 3:
-            token_mint = parts[1]
-            try:
-                amount_sol = float(parts[2])
-                await update.message.reply_text(f"⏳ ট্রেড এক্সিকিউট করা হচ্ছে... টোকেন: `{token_mint}`, পরিমাণ: `{amount_sol} SOL`")
-                result_msg = execute_jupiter_swap(token_mint, amount_sol)
-                await update.message.reply_text(result_msg, parse_mode="Markdown")
-            except ValueError:
-                await update.message.reply_text("❌ ভুল পরিমাণ (Amount)। সঠিক ফরম্যাট: `Buy <Token_Mint> <Amount>`")
-        else:
-            await update.message.reply_text("❌ ফরম্যাট সঠিক নয়। ব্যবহার করুন: `Buy <Token_Mint_Address> <SOL_Amount>`")
-    else:
-        wallet_address, balance_sol = get_wallet_details()
-        market_info = fetch_market_trends()
-        ai_thought = ask_openrouter_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
-        await update.message.reply_text(
-            f"🤖 এআই এজেন্ট রেসপন্স:\n\n{ai_thought}\n\nনতুন ট্রেড করতে ঠিক এভাবে লিখে পাঠান:\n**'Buy <Mint> <Amount>'** অথবা মিশন সেট করতে **'Order:'** লিখে পাঠান।"
+        structured_prompt = (
+            f"Previous Context:\n{history_text}\n\n"
+            f"Analyze the data and provide a clear business decision or conclusion.\n"
+            f"Question: {query}\n"
+            f"Data:\n{combined_data}\n"
+            f"Decision:"
         )
+        
+        if llm_brain:
+            ai_output = llm_brain(structured_prompt, max_length=150, do_sample=True)
+            answer = ai_output[0]['generated_text']
+        else:
+            answer = f"AI model is currently reloading. Based on web data: {combined_data[:100]}"
+            
+        # মেমোরিতে নতুন চ্যাট সেভ করা (Memory Update)
+        if chat_id not in CHAT_HISTORIES:
+            CHAT_HISTORIES[chat_id] = []
+        CHAT_HISTORIES[chat_id].append({"q": query, "a": answer})
+        
+        return answer
+    except Exception as e:
+        return f"System Auto-Recovered from minor error. Analysis fallback: Unable to fully process due to [{str(e)}], but your system is safe and running."
 
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+# --- সেলফ-রিকভারিং টেলিগ্রাম বট ব্যাকগ্রাউন্ড ওয়ার্কার ---
+def telegram_bot_worker():
+    time.sleep(15)
+    offset = 0
+    print("Autonomous Telegram Bot Worker Started 🤖")
+    
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates?offset={offset}&timeout=30"
+            response = requests.get(url, timeout=35)
+            data = response.json()
+            
+            if data.get("ok"):
+                for update in data.get("result", []):
+                    offset = update["update_id"] + 1
+                    message = update.get("message")
+                    if not message:
+                        continue
+                        
+                    chat_id = message["chat"]["id"]
+                    user_id = message["from"]["id"]
+                    text = message.get("text", "").strip()
+                    
+                    if user_id != ADMIN_TELEGRAM_ID:
+                        requests.post(
+                            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                            json={"chat_id": chat_id, "text": "Access Denied - আপনি এই বটের অনুমতিপ্রাপ্ত ব্যবহারকারী নন।"}
+                        )
+                        continue
+                    
+                    if text == "/generatekey":
+                        new_key = f"ai_key_{secrets.token_hex(12)}"
+                        VALID_API_KEYS.add(new_key)
+                        reply_text = f"🔑 নতুন এপিআই কি জেনারেট করা হয়েছে:\n\n`{new_key}`\n\nএটি আপনার অন্য সিস্টেমে ব্যবহার করতে পারবেন।"
+                    
+                    elif text in ["/start", "/help"]:
+                        reply_text = (
+                            "🤖 **স্মার্ট এআই ডাটা অ্যানালিস্ট ও অটোনমাস বট সক্রিয়!**\n\n"
+                            "📌 `/generatekey` - নতুন সিক্রেট এপিআই কি তৈরি করতে\n"
+                            "📌 `/clearmemory` - চ্যাট মেমোরি পরিষ্কার করতে\n"
+                            "📌 যেকোনো প্রশ্ন বা বিষয় লিখে পাঠান - সরাসরি লাইভ সার্চ ও এআই এনালাইসিস পেতে।"
+                        )
+                    
+                    elif text == "/clearmemory":
+                        CHAT_HISTORIES[chat_id] = []
+                        reply_text = "🧹 মেমোরি সফলভাবে পরিষ্কার করা হয়েছে!"
+                    
+                    else:
+                        res_msg = requests.post(
+                            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                            json={"chat_id": chat_id, "text": "🔄 মেমোরি ও সার্চ চেক করে এনালাইসিস করা হচ্ছে..."}
+                        ).json()
+                        
+                        ai_result = run_ai_analysis(chat_id, text)
+                        
+                        reply_text = f"💡 **এআই বিশ্লেষণ ও সিদ্ধান্ত:**\n\n{ai_result}"
+                        if res_msg.get("ok"):
+                            msg_id = res_msg["result"]["message_id"]
+                            requests.post(
+                                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText",
+                                json={"chat_id": chat_id, "message_id": msg_id, "text": reply_text}
+                            )
+                        continue
+                    
+                    requests.post(
+                        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                        json={"chat_id": chat_id, "text": reply_text, "parse_mode": "Markdown"}
+                    )
+                    
+        except Exception as e:
+            print(f"Telegram Bot Self-Recovery Triggered due to: {e}")
+            time.sleep(5)
+
+
+@app.on_event("startup")
+def startup_event():
+    bot_thread = threading.Thread(target=telegram_bot_worker, daemon=True)
+    bot_thread.start()
+    print("Autonomous Background Threads Initialized 🚀")
+
+
+class DataAnalysisRequest(BaseModel):
+    query: str
+    max_length: int = 150
+
+def verify_api_key(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "").strip()
+    if token not in VALID_API_KEYS:
+        raise HTTPException(status_code=401, detail="Invalid API Key - অ্যাক্সেস ডিনাইড")
+    return token
+
+@app.get("/")
+def home():
+    return {"status": "Smart AI Data Analyst & Autonomous API Engine with Memory & Self-Recovery is Active 🟢"}
+
+@app.post("/api/v1/smart-analyze")
+def smart_analyze_and_decide(data: DataAnalysisRequest, token: str = Depends(verify_api_key)):
+    try:
+        result = run_ai_analysis(0, data.query)
+        return {
+            "status": "success",
+            "engine": "Autonomous AI with Memory & Self-Recovery",
+            "user_query": data.query,
+            "ai_decision_and_analysis": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Self-Recovery Triggered Error: {str(e)}")
+
 
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-
-    ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
-    ping_thread.start()
-
-    app_telegram = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    app_telegram.add_handler(CommandHandler("start", start_command))
-    app_telegram.add_handler(CommandHandler("status", status_command))
-    app_telegram.add_handler(CommandHandler("stop", stop_command))
-    app_telegram.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-
-    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, args=(app_telegram,), daemon=True)
-    ai_brain_thread.start()
-
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            pass
-        else:
-            app_telegram.run_polling()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        app_telegram.run_polling()
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
