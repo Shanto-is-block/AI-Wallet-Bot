@@ -19,7 +19,7 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 আপনার দেওয়া Groq API Key এখানে সেট করা হয়েছে
+# 👉 Groq API Key (সঠিক ছোট হাতের 'gsk_' ফরম্যাটে আপডেট করা হয়েছে)
 GROQ_API_KEYS = [
     "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"
 ]
@@ -176,7 +176,7 @@ def rule_based_fallback_brain(balance_sol, market_info):
         f"*(নোট: এপিআই সাময়িকভাবে ব্যস্ত থাকায় ফলব্যাক ইঞ্জিন এই ডিসিশন নিয়েছে)*"
     )
 
-# --- Groq AI Brain Integration (Replaces Gemini) ---
+# --- Groq AI Brain Integration ---
 def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
     global current_key_index
     
@@ -327,7 +327,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         market_info = fetch_market_trends()
         ai_thought = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
         await update.message.reply_text(
-            f"🤖 এআই এজেন্ট রেসপন্স:\n\n{ai_thought}\n\nনতুন ট্রেড করতে **'Buy <Mint> <Amount>'** অথবা মিশন সেট করতে **'Order:'** লিখে পাঠান।"
+            f"🤖 এআই এজেন্ট রেসপন্স:\n\n{ai_thought}\n\nনতুন ট্রেড করতে ঠিক এভাবে লিখে পাঠান:\n**'Buy <Mint> <Amount>'** অথবা মিশন সেট করতে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
