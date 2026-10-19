@@ -19,11 +19,9 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 জেমিনি এপিআই কি লিস্ট (AQ. ফরম্যাট সমর্থিত)
-GEMINI_API_KEYS = [
-    "AQ.Ab8RN6IbYudc3aFEJ7rsG8MbfZbdZkmvOYP1h-vBBkdhut4Wag",
-    "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
-    "AQ.Ab8RN6LsJVXghsoTDrmFqezoicR9i2a8WreGYDg6_0d4mrk9ig"
+# 👉 আপনার দেওয়া Groq API Key এখানে সেট করা হয়েছে
+GROQ_API_KEYS = [
+    "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"
 ]
 
 current_key_index = 0
@@ -38,11 +36,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Autonomous Crypto AI Trading Agent (Jupiter DEX Enabled) is Active!"
+    return "🤖 Autonomous Crypto AI Trading Agent (Groq & Jupiter DEX Enabled) is Active!"
 
 # Global State
-bot_status = "Active 🟢 (Automated DEX Trading & Header-Auth Multi-Key AI Engine Running)"
-current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, জেমিনি এআই ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
+bot_status = "Active 🟢 (Groq Llama AI & Jupiter DEX Trading Engine Running)"
+current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, Groq AI ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
 last_ai_action_log = "System initialized."
 ai_memory = []  
 is_bot_running = True
@@ -109,9 +107,8 @@ def fetch_market_trends():
     except Exception as e:
         return f"Market fetch error: {str(e)[:25]}"
 
-# --- TOOL 3: Automated Token Swap via Jupiter DEX (Real Trading Engine) ---
+# --- TOOL 3: Automated Token Swap via Jupiter DEX ---
 def execute_jupiter_swap(output_mint, amount_sol):
-    # Safety Guardrail: Maximum 0.02 SOL per auto-trade to prevent heavy losses
     if amount_sol > 0.02:
         return "❌ [Safety Guardrail Blocked]: সুরক্ষার স্বার্থে একবারে ০.০২ SOL এর বেশি অটো-ট্রেড নিষিদ্ধ।"
     
@@ -123,7 +120,6 @@ def execute_jupiter_swap(output_mint, amount_sol):
         input_mint = "So11111111111111111111111111111111111111112" # Wrapped SOL
         lamports = int(amount_sol * 1000000000)
         
-        # 1. Get Quote from Jupiter
         quote_url = f"https://quote-jup.ag/v6/quote?inputMint={input_mint}&outputMint={output_mint}&amount={lamports}&slippageBps=150"
         quote_res = requests.get(quote_url, timeout=8)
         if quote_res.status_code != 200:
@@ -131,7 +127,6 @@ def execute_jupiter_swap(output_mint, amount_sol):
         
         quote_data = quote_res.json()
         
-        # 2. Get Swap Transaction from Jupiter
         swap_url = "https://quote-jup.ag/v6/swap"
         payload = {
             "quoteResponse": quote_data,
@@ -145,7 +140,6 @@ def execute_jupiter_swap(output_mint, amount_sol):
         swap_data = swap_res.json()
         swap_transaction_base64 = swap_data.get("swapTransaction")
         
-        # 3. Deserialize, Sign and Broadcast to Solana RPC
         raw_tx_bytes = base58.b58decode(swap_transaction_base64)
         tx = VersionedTransaction.from_bytes(raw_tx_bytes)
         
@@ -179,14 +173,14 @@ def rule_based_fallback_brain(balance_sol, market_info):
         f"📊 **Market Report:** {market_info}\n"
         f"👛 **Wallet Balance:** {balance_sol} SOL\n"
         f"💡 **Strategic Advice:** {advice}\n"
-        f"*(নোট: এপিআই কি সাময়িকভাবে ব্যস্ত থাকায় ইন্টারনাল স্মার্ট এআই ইঞ্জিন এই ডিসিশন নিয়েছে)*"
+        f"*(নোট: এপিআই সাময়িকভাবে ব্যস্ত থাকায় ফলব্যাক ইঞ্জিন এই ডিসিশন নিয়েছে)*"
     )
 
-# --- Multi-Key Rotation Gemini Brain (Updated with Header Authentication) ---
-def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
+# --- Groq AI Brain Integration (Replaces Gemini) ---
+def ask_groq_ai_agent(wallet_address, balance_sol, market_info, user_order):
     global current_key_index
     
-    valid_keys = [k for k in GEMINI_API_KEYS if k and "YOUR_" not in k]
+    valid_keys = [k for k in GROQ_API_KEYS if k and "YOUR_" not in k]
     if not valid_keys:
         return rule_based_fallback_brain(balance_sol, market_info)
 
@@ -197,24 +191,30 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
     Wallet Balance: {balance_sol} SOL
     Market Info: {market_info}
     
-    Analyze the market trends and decide whether conditions are optimal to trigger a buy/swap or hold. Provide strategic insights in Bengali.
+    Analyze the market trends and decide whether conditions are optimal to trigger a buy/swap or hold. Provide strategic insights and answers clearly in Bengali.
     """
 
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    total_keys = len(valid_keys)
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
+    total_keys = len(valid_keys)
     for _ in range(total_keys):
         active_key = valid_keys[current_key_index % total_keys]
         
-        # 👉 হেডার অথেন্টিকেশন পদ্ধতি (AQ. কি গুলোর জন্য আবশ্যক)
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
         headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": active_key
+            "Authorization": f"Bearer {active_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7
         }
         
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=8)
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
             
             if response.status_code in [429, 403, 401]:
                 current_key_index = (current_key_index + 1) % total_keys
@@ -222,10 +222,10 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
                 
             if response.status_code == 200:
                 res_json = response.json()
-                candidate = res_json.get('candidates', [])
-                if candidate:
-                    text_output = candidate[0]['content']['parts'][0]['text']
-                    return f"🧠 **[Gemini AI Trading Brain (Key #{current_key_index + 1})]:**\n{text_output}"
+                choices = res_json.get('choices', [])
+                if choices:
+                    text_output = choices[0]['message']['content']
+                    return f"🧠 **[Groq Llama AI Trading Brain]:**\n{text_output}"
             
             current_key_index = (current_key_index + 1) % total_keys
         except Exception:
@@ -234,7 +234,7 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
 
     return rule_based_fallback_brain(balance_sol, market_info)
 
-# --- Autonomous Background Worker Loop (Auto-Trading Enabled) ---
+# --- Autonomous Background Worker Loop ---
 def run_autonomous_solana_ai_brain(application):
     global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
     
@@ -247,7 +247,7 @@ def run_autonomous_solana_ai_brain(application):
             wallet_address, balance_sol = get_wallet_details()
             market_info = fetch_market_trends()
             
-            ai_thought_process = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+            ai_thought_process = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
 
             action_log = (
                 f"🎯 **Mission:** {current_active_order}\n"
@@ -256,7 +256,7 @@ def run_autonomous_solana_ai_brain(application):
                 f"{ai_thought_process}"
             )
             last_ai_action_log = action_log
-            bot_status = "Active 🟢 (Auto-DEX Trading Engine Healthy)"
+            bot_status = "Active 🟢 (Groq AI & Auto-DEX Trading Engine Healthy)"
             
             ai_memory.append(action_log)
             if len(ai_memory) > 5:
@@ -271,8 +271,8 @@ def run_autonomous_solana_ai_brain(application):
 # --- Telegram Command Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🚀 **Autonomous Crypto Trading Agent Activated!**\n\n"
-        "📈 জুপিটার ডিইএক্স (Jupiter DEX) এবং জেমিনি এআই ব্রেন (হেডার অথেন্টিকেশন সহ) সচল রয়েছে।\n\n"
+        "🚀 **Autonomous Crypto Trading Agent Activated (Powered by Groq AI)!**\n\n"
+        "📈 Groq Llama-3.3 এবং জুপিটার ডিইএক্স (Jupiter DEX) সফলভাবে সংযুক্ত রয়েছে।\n\n"
         "কমান্ডসমূহ:\n"
         "📊 `/status` - লাইভ এআই অ্যানালাইসিস ও ব্যালেন্স দেখতে\n"
         "⚡ `Buy <Token_Mint> <Amount>` - নির্দিষ্ট টোকেন কিনতে\n"
@@ -283,7 +283,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wallet_address, balance_sol = get_wallet_details()
     market_info = fetch_market_trends()
-    ai_thought = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+    ai_thought = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
     
     status_msg = (
         f"📊 **AI Autonomous Trading Live Status**\n\n"
@@ -325,7 +325,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         wallet_address, balance_sol = get_wallet_details()
         market_info = fetch_market_trends()
-        ai_thought = ask_gemini_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
+        ai_thought = ask_groq_ai_agent(wallet_address, balance_sol, market_info, current_active_order)
         await update.message.reply_text(
             f"🤖 এআই এজেন্ট রেসপন্স:\n\n{ai_thought}\n\nনতুন ট্রেড করতে **'Buy <Mint> <Amount>'** অথবা মিশন সেট করতে **'Order:'** লিখে পাঠান।"
         )
