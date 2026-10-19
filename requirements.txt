@@ -1,5 +1,5 @@
 flask
 python-telegram-bot
 requests
-bip-utils
 solders
+bip-utils
