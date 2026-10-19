@@ -23,7 +23,7 @@ RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com"
 GEMINI_API_KEYS = [
     "AQ.Ab8RN6IbYudc3aFEJ7rsG8MbfZbdZkmvOYP1h-vBBkdhut4Wag",
     "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
-    "YOUR_THIRD_GEMINI_API_KEY"
+    "AQ.Ab8RN6LsJVXghsoTDrmFqezoicR9i2a8WreGYDg6_0d4mrk9ig"
 ]
 
 current_key_index = 0
