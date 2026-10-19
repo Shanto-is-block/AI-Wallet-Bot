@@ -301,9 +301,6 @@ def run_autonomous_solana_ai_brain(application):
             if len(ai_memory) > 5:
                 ai_memory.pop(0)
             
-            # ব্যাকগ্রাউন্ড লুপ থেকে সরাসরি আপনার চ্যাট আইডিতে আপডেট পাঠানো (অপশনাল অ্যালার্ট)
-            # send_telegram_alert(action_log)
-            
             time.sleep(120) 
                 
         except Exception as e:
@@ -315,7 +312,7 @@ def run_autonomous_solana_ai_brain(application):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "🚀 **Solana Autonomous Custom AI Agent Activated!**\n\n"
-        "🧠🔗🤖 **বৈশিষ্ট্য:** নতুন টেলিগ্রাম বট এবং কাস্টম এআই এপিআই (`https://ai-api-cgzb.onrender.com`) সফলভাবে যুক্ত করা হয়েছে।\n\n"
+        "🧠🔗🤖 **বৈশিষ্ট্য:** নতুন টেলিগ্রাম বট এবং কাস্টম এআই এপিআই সফলভাবে যুক্ত করা হয়েছে। ওয়ালেটে ব্যালেন্স শূন্য থাকলেও এটি কাস্টম এআই এপিআই ব্যবহার করে অফ-চেইন সিগন্যাল ও আয়ের প্ল্যান তৈরি করবে।\n\n"
         "কমান্ডসমূহ:\n"
         "📊 `/status` - কাস্টম এআই ব্রেনের পরিকল্পনা ও এক্সিকিউশন রিপোর্ট দেখতে\n"
         "🛑 `/stop` - বোট পজ করতে"
@@ -355,7 +352,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address, balance_sol = get_real_solana_wallet_details()
         ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
         await update.message.reply_text(
-            f"🤖 আমি আমার নতুন টেলিগ্রাম বট ও কাস্টম এআই এপিআই নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
+            f"🤖 আমি আমার কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
         )
 
 def run_flask():
@@ -368,14 +365,16 @@ if __name__ == "__main__":
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
-    app_telegram = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    # টেলিগ্রাম অ্যাপ্লিকেশন তৈরি এবং হ্যান্ডলার যুক্ত করা (লেটেস্ট ভার্সনের সাথে সামঞ্জস্যপূর্ণ)
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
-    app_telegram.add_handler(CommandHandler("start", start_command))
-    app_telegram.add_handler(CommandHandler("status", status_command))
-    app_telegram.add_handler(CommandHandler("stop", stop_command))
-    app_telegram.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, args=(app_telegram,), daemon=True)
+    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, args=(application,), daemon=True)
     ai_brain_thread.start()
 
-    app_telegram.run_polling()
+    # সঠিক নিয়মে পোলিং স্টার্ট করা
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
