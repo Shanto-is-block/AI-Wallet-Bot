@@ -1,5 +1,5 @@
-flask
-python-telegram-bot
-requests
-solders
-base58
+Flask==3.0.3
+requests==2.31.0
+python-telegram-bot==21.1.1
+solders==0.21.0
+base58==2.1.1
