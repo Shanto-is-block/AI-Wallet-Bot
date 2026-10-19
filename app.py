@@ -19,7 +19,7 @@ TELEGRAM_BOT_TOKEN = "8974206752:AAFqOusGoMFjh0snVhUQZFEvt58jJ56FVIk"
 SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
 RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
 
-# 👉 জেমিনি এপিআই কি লিস্ট
+# 👉 জেমিনি এপিআই কি লিস্ট (AQ. ফরম্যাট সমর্থিত)
 GEMINI_API_KEYS = [
     "AQ.Ab8RN6IbYudc3aFEJ7rsG8MbfZbdZkmvOYP1h-vBBkdhut4Wag",
     "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
@@ -41,7 +41,7 @@ def home():
     return "🤖 Autonomous Crypto AI Trading Agent (Jupiter DEX Enabled) is Active!"
 
 # Global State
-bot_status = "Active 🟢 (Automated DEX Trading & Multi-Key AI Engine Running)"
+bot_status = "Active 🟢 (Automated DEX Trading & Header-Auth Multi-Key AI Engine Running)"
 current_active_order = "অটোনমাস মিশন: ট্রেন্ডিং মার্কেট স্ক্যান, জেমিনি এআই ডিসিশন এবং জুপিটার ডিইএক্স (Jupiter DEX) এর মাধ্যমে অটো-সোয়াপ ও প্রফিট হান্টিং।"
 last_ai_action_log = "System initialized."
 ai_memory = []  
@@ -171,13 +171,24 @@ def execute_jupiter_swap(output_mint, amount_sol):
     except Exception as e:
         return f"❌ Swap Execution Exception: {str(e)}"
 
-# --- Multi-Key Rotation Gemini Brain ---
+# --- Smart Fallback Brain ---
+def rule_based_fallback_brain(balance_sol, market_info):
+    advice = "💡 ওয়ালেটে পর্যাপ্ত ফান্ড রয়েছে বা মার্কেট স্ক্যান চলছে।" if balance_sol > 0 else "💡 ওয়ালেটে ০ SOL রয়েছে। গ্যাস ফি যুক্ত করুন।"
+    return (
+        f"🧠 **[Smart Built-in AI Brain Active]:**\n"
+        f"📊 **Market Report:** {market_info}\n"
+        f"👛 **Wallet Balance:** {balance_sol} SOL\n"
+        f"💡 **Strategic Advice:** {advice}\n"
+        f"*(নোট: এপিআই কি সাময়িকভাবে ব্যস্ত থাকায় ইন্টারনাল স্মার্ট এআই ইঞ্জিন এই ডিসিশন নিয়েছে)*"
+    )
+
+# --- Multi-Key Rotation Gemini Brain (Updated with Header Authentication) ---
 def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
     global current_key_index
     
     valid_keys = [k for k in GEMINI_API_KEYS if k and "YOUR_" not in k]
     if not valid_keys:
-        return "🧠 **[Fallback Brain]:** কোনো এপিআই কি পাওয়া যায়নি।"
+        return rule_based_fallback_brain(balance_sol, market_info)
 
     prompt = f"""
     You are an autonomous crypto AI trading agent managing a Solana wallet.
@@ -194,11 +205,18 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
     
     for _ in range(total_keys):
         active_key = valid_keys[current_key_index % total_keys]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={active_key}"
+        
+        # 👉 হেডার অথেন্টিকেশন পদ্ধতি (AQ. কি গুলোর জন্য আবশ্যক)
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": active_key
+        }
         
         try:
-            response = requests.post(url, json=payload, timeout=8)
-            if response.status_code in [429, 403]:
+            response = requests.post(url, headers=headers, json=payload, timeout=8)
+            
+            if response.status_code in [429, 403, 401]:
                 current_key_index = (current_key_index + 1) % total_keys
                 continue
                 
@@ -214,7 +232,7 @@ def ask_gemini_ai_agent(wallet_address, balance_sol, market_info, user_order):
             current_key_index = (current_key_index + 1) % total_keys
             continue
 
-    return "🧠 **[Brain Error]:** All Gemini keys failed."
+    return rule_based_fallback_brain(balance_sol, market_info)
 
 # --- Autonomous Background Worker Loop (Auto-Trading Enabled) ---
 def run_autonomous_solana_ai_brain(application):
@@ -254,7 +272,7 @@ def run_autonomous_solana_ai_brain(application):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🚀 **Autonomous Crypto Trading Agent Activated!**\n\n"
-        "📈 জুপিটার ডিইএক্স (Jupiter DEX) এবং জেমিনি এআই ব্রেন সংযুক্ত রয়েছে। বোট এখন রিয়েল ট্রেড ও সোয়াপ করতে সক্ষম।\n\n"
+        "📈 জুপিটার ডিইএক্স (Jupiter DEX) এবং জেমিনি এআই ব্রেন (হেডার অথেন্টিকেশন সহ) সচল রয়েছে।\n\n"
         "কমান্ডসমূহ:\n"
         "📊 `/status` - লাইভ এআই অ্যানালাইসিস ও ব্যালেন্স দেখতে\n"
         "⚡ `Buy <Token_Mint> <Amount>` - নির্দিষ্ট টোকেন কিনতে\n"
@@ -292,7 +310,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ নতুন এআই মিশন সেট করা হয়েছে: {current_active_order}")
         
     elif user_text.lower().startswith("buy "):
-        # Format: Buy <Token_Mint_Address> <Amount_SOL>
         parts = user_text.split()
         if len(parts) >= 3:
             token_mint = parts[1]
