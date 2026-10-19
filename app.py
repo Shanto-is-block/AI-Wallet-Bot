@@ -3,8 +3,6 @@ import time
 import threading
 import requests
 from flask import Flask
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import transfer, TransferParams
@@ -41,16 +39,10 @@ def home():
 
 # Global State and Autonomous Mind State
 bot_status = "Active 🟢 (Custom AI API & Resilient Engine Running)"
-
-# ডিফল্ট অর্ডার: অটোনমাস কাস্টম এআই ও ক্রিপ্টো আর্নিং হান্টিং
 current_active_order = "অটোনমাস মিশন: কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন ব্যবহার করে জিরো ব্যালেন্সেও সিগন্যাল ও প্রফিট প্ল্যান তৈরি করা।"
-
-last_ai_action_log = "System initialized with custom AI API integration."
-ai_memory = []  
-agent_learning_log = [] 
 is_bot_running = True
 
-# --- Strategy Pool & Reinforcement Weights ---
+# --- Strategy Pool ---
 strategy_pool = {
     "Custom_AI_API_Hunting": {"weight": 1.8, "success": 0, "fail": 0},
     "OffChain_Signal_Hunting": {"weight": 1.5, "success": 0, "fail": 0},
@@ -210,8 +202,7 @@ def execute_on_chain_hand_tool(target_address=None, amount_sol=0.0):
 
 # --- Autonomous Brain & Custom AI Engine ---
 def evaluate_and_run_autonomous_brain(balance_sol):
-    global strategy_pool, agent_learning_log
-    
+    global strategy_pool
     thought_log = ""
     execution_result = ""
     
@@ -234,7 +225,6 @@ def evaluate_and_run_autonomous_brain(balance_sol):
                 chain_success, chain_msg = execute_on_chain_hand_tool()
                 if chain_success:
                     strategy_pool[best_strategy]["weight"] += 0.1
-                    strategy_pool[best_strategy]["success"] += 1
                     execution_result = f"✅ [Execution Success via {best_strategy}]: {chain_msg}"
                 else:
                     raise Exception(chain_msg)
@@ -247,24 +237,13 @@ def evaluate_and_run_autonomous_brain(balance_sol):
             raise Exception("Custom AI API call failed.")
             
     except Exception as e:
-        err_msg = str(e)
-        strategy_pool["Custom_AI_API_Hunting"]["weight"] = max(0.1, strategy_pool["Custom_AI_API_Hunting"]["weight"] - 0.2)
-        strategy_pool["Custom_AI_API_Hunting"]["fail"] += 1
-        
-        agent_learning_log.append(err_msg[:30])
-        
-        fallback_strategy = min(strategy_pool.keys(), key=lambda s: strategy_pool[s]["fail"])
-        thought_log += f"\n⚠️ [Self-Correction Triggered]: ফেইল করায় ব্রেন বিকল্প স্ট্র্যাটেজি [{fallback_strategy}] এ সুইচ করেছে।"
-        execution_result = f"🔄 [Self-Healing Executed]: বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো।"
-        
-    if len(agent_learning_log) > 0:
-        thought_log += f"\n💡 [Self-Learning Applied]: পূর্বের অভিজ্ঞতা থেকে ব্রেন তার আয়ের লজিক আরও শাণিত করেছে।"
+        execution_result = f"🔄 [Self-Healing Executed]: বিকল্প পরিকল্পনা দিয়ে পুনরায় চেষ্টা করা হলো। Error: {str(e)[:30]}"
         
     return thought_log, execution_result
 
 # --- Autonomous Background Worker ---
-def run_autonomous_solana_ai_brain(application):
-    global bot_status, last_ai_action_log, ai_memory, current_active_order, is_bot_running
+def run_autonomous_solana_ai_brain():
+    global bot_status, is_bot_running
     
     while True:
         if not is_bot_running:
@@ -273,87 +252,25 @@ def run_autonomous_solana_ai_brain(application):
             
         try:
             wallet_address, balance_sol = get_real_solana_wallet_details()
-            
             ai_thought_process, execution_output = evaluate_and_run_autonomous_brain(balance_sol)
             
-            api_status = "Solana network scanning with Custom AI API..."
-            try:
-                res = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd", timeout=5)
-                if res.status_code == 200:
-                    data = res.json()
-                    price = data.get('solana', {}).get('usd', 0)
-                    api_status = f"Solana Price: ${price} | Custom AI API Active"
-            except Exception:
-                api_status = "Running on backup RPC..."
-
             action_log = (
                 f"🎯 Active Mission: {current_active_order}\n"
                 f"👛 Wallet Address: `{wallet_address}`\n"
-                f"💰 Balance: {balance_sol:.4f} SOL\n"
-                f"{ai_thought_process}\n"
-                f"⚙️ **Execution Result:**\n{execution_output}\n"
-                f"🌐 Status: {api_status}"
+                f"💰 Balance: {balance_sol:.4f} SOL\n\n"
+                f"{ai_thought_process}\n\n"
+                f"⚙️ **Execution Result:**\n{execution_output}"
             )
-            last_ai_action_log = action_log
+            
+            # সার্ভার থেকে সরাসরি টেলিগ্রামে আপডেট পাঠিয়ে দেওয়া
+            send_telegram_alert(action_log)
             bot_status = "Active 🟢 (Custom AI API & Resilient Engine Running)"
             
-            ai_memory.append(action_log)
-            if len(ai_memory) > 5:
-                ai_memory.pop(0)
-            
-            time.sleep(120) 
+            time.sleep(300) # প্রতি ৫ মিনিট পর পর অটোনমাস লুপ চলবে
                 
         except Exception as e:
-            bot_status = f"Error: {str(e)} ❌ (Self-Healing Active...)"
-            agent_learning_log.append(f"Loop error: {str(e)[:25]}")
+            bot_status = f"Error: {str(e)} ❌"
             time.sleep(15)
-
-# --- Telegram Command Handlers ---
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "🚀 **Solana Autonomous Custom AI Agent Activated!**\n\n"
-        "🧠🔗🤖 **বৈশিষ্ট্য:** নতুন টেলিগ্রাম বট এবং কাস্টম এআই এপিআই সফলভাবে যুক্ত করা হয়েছে। ওয়ালেটে ব্যালেন্স শূন্য থাকলেও এটি কাস্টম এআই এপিআই ব্যবহার করে অফ-চেইন সিগন্যাল ও আয়ের প্ল্যান তৈরি করবে।\n\n"
-        "কমান্ডসমূহ:\n"
-        "📊 `/status` - কাস্টম এআই ব্রেনের পরিকল্পনা ও এক্সিকিউশন রিপোর্ট দেখতে\n"
-        "🛑 `/stop` - বোট পজ করতে"
-    )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    wallet_address, balance_sol = get_real_solana_wallet_details()
-    ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
-    
-    status_msg = (
-        f"📊 **Custom AI Earning Report**\n\n"
-        f"🔹 **Status:** {bot_status}\n"
-        f"👛 **Wallet Address:** `{wallet_address}`\n"
-        f"💰 **Balance:** {balance_sol:.4f} SOL\n"
-        f"🎯 **Mission:** {current_active_order}\n\n"
-        f"{ai_thought}\n\n"
-        f"⚙️ **Execution Result:**\n{execution_out}"
-    )
-    await update.message.reply_text(status_msg, parse_mode="Markdown")
-
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global current_active_order, bot_status
-    current_active_order = "Paused by user."
-    bot_status = "Paused 🟡"
-    await update.message.reply_text("🛑 অটোনমাস কাস্টম এআই ইঞ্জিন সাময়িকভাবে পজ করা হয়েছে।")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global current_active_order, bot_status
-    user_text = update.message.text.strip()
-    
-    if user_text.lower().startswith("order:"):
-        custom_order = user_text[6:].strip()
-        current_active_order = custom_order
-        await update.message.reply_text(f"✅ নতুন অটোনমাস মিশন গ্রহণ করা হয়েছে: {custom_order}")
-    else:
-        wallet_address, balance_sol = get_real_solana_wallet_details()
-        ai_thought, execution_out = evaluate_and_run_autonomous_brain(balance_sol)
-        await update.message.reply_text(
-            f"🤖 আমি আমার কাস্টম এআই এপিআই ও রেসিলিয়েন্ট ইঞ্জিন নিয়ে মিশনে সক্রিয় আছি।\n\n{ai_thought}\n\nনতুন কোনো নির্দেশ দিতে চাইলে **'Order:'** লিখে পাঠান।"
-        )
 
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
@@ -365,16 +282,8 @@ if __name__ == "__main__":
     ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
     ping_thread.start()
 
-    # টেলিগ্রাম অ্যাপ্লিকেশন তৈরি এবং হ্যান্ডলার যুক্ত করা (লেটেস্ট ভার্সনের সাথে সামঞ্জস্যপূর্ণ)
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("stop", stop_command))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-
-    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, args=(application,), daemon=True)
+    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, daemon=True)
     ai_brain_thread.start()
 
-    # সঠিক নিয়মে পোলিং স্টার্ট করা
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # মূল ফ্লাস্ক সার্ভার সচল রাখা
+    flask_thread.join()
