@@ -21,7 +21,7 @@ RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com"
 # 👉 এখানে আপনার যত খুশি ফ্রি জেমিনি এপিআই কি লিস্ট আকারে বসাতে পারেন।
 # যদি কোনো কি না থাকে বা ফাঁকা রাখেন (""), তবে সিস্টেম নিজে থেকেই ফলব্যাক মোডে কাজ করবে।
 GEMINI_API_KEYS = [
-    "YOUR_FIRST_GEMINI_API_KEY",
+    "AQ.Ab8RN6IbYudc3aFEJ7rsG8MbfZbdZkmvOYP1h-vBBkdhut4Wag",
     "AQ.Ab8RN6JIdSFm3ryeqLsmZ74wsYnncsRFX302mXF4ZPbCJ_xMPQ",
     "YOUR_THIRD_GEMINI_API_KEY"
 ]
