@@ -71,7 +71,6 @@ def init_db():
                 timestamp TEXT
             )
         ''')
-        # Permanent System Config table to store Wallet Key securely across server restarts
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_config (
                 key TEXT PRIMARY KEY,
@@ -165,6 +164,33 @@ def save_persistent_memory(s_pool, a_memory):
 
 strategy_pool, agent_memory = load_persistent_memory()
 
+# --- Robust Request Wrappers with Retry & Timeout ---
+def safe_get(url, timeout=12, retries=3):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    for i in range(retries):
+        try:
+            res = requests.get(url, headers=headers, timeout=timeout)
+            return res
+        except Exception as e:
+            if i == retries - 1:
+                print(f"GET Error [{url}]: {e}")
+                return None
+            time.sleep(2)
+    return None
+
+def safe_post(url, json_data=None, timeout=12, retries=3):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Content-Type": "application/json"}
+    for i in range(retries):
+        try:
+            res = requests.post(url, json=json_data, headers=headers, timeout=timeout)
+            return res
+        except Exception as e:
+            if i == retries - 1:
+                print(f"POST Error [{url}]: {e}")
+                return None
+            time.sleep(2)
+    return None
+
 def send_telegram_message(chat_id, text_message):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -173,7 +199,7 @@ def send_telegram_message(chat_id, text_message):
             "text": text_message,
             "parse_mode": "Markdown"
         }
-        requests.post(url, json=payload, timeout=5)
+        safe_post(url, json_data=payload, timeout=8, retries=2)
     except Exception as e:
         print(f"Telegram Send Error: {e}")
 
@@ -185,8 +211,8 @@ def get_fastest_rpc():
     for rpc in SOLANA_RPC_URLS:
         try:
             start_time = time.time()
-            res = requests.post(rpc, json={"jsonrpc": "2.0", "id": 1, "method": "getHealth"}, timeout=3)
-            if res.status_code == 200:
+            res = safe_post(rpc, json_data={"jsonrpc": "2.0", "id": 1, "method": "getHealth"}, timeout=5, retries=1)
+            if res and res.status_code == 200:
                 latency = time.time() - start_time
                 if latency < min_latency:
                     min_latency = latency
@@ -199,7 +225,6 @@ def get_fastest_rpc():
 # --- WEB DASHBOARD ROUTES ---
 # ==========================================
 def get_solana_keypair():
-    global runtime_private_key
     try:
         current_key = get_saved_wallet_key()
         if not current_key:
@@ -220,9 +245,11 @@ def get_real_solana_wallet_details():
         wallet_address = str(keypair.pubkey())
         payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [wallet_address]}
         rpc_url = get_fastest_rpc()
-        res = requests.post(rpc_url, json=payload, timeout=6).json()
-        if "result" in res and "value" in res["result"]:
-            balance_sol = float(res["result"]["value"]) / 1000000000.0
+        res = safe_post(rpc_url, json_data=payload, timeout=8, retries=2)
+        if res and res.status_code == 200:
+            data = res.json()
+            if "result" in data and "value" in data["result"]:
+                balance_sol = float(data["result"]["value"]) / 1000000000.0
     except Exception as e:
         print(f"Balance Check Error: {e}")
     return wallet_address, balance_sol
@@ -295,7 +322,7 @@ def connect_wallet():
         test_kp = Keypair.from_bytes(test_bytes)
         with data_lock:
             runtime_private_key = private_key_input
-            save_wallet_key_to_db(private_key_input) # Permanent DB save
+            save_wallet_key_to_db(private_key_input)
         return redirect(url_for('dashboard', msg='Wallet connected & saved securely! Bot is active.', error='0'))
     except Exception as e:
         return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
@@ -460,7 +487,7 @@ def self_ping_worker():
         try:
             time.sleep(480) 
             if RENDER_APP_URL and "your-bot-name" not in RENDER_APP_URL:
-                requests.get(RENDER_APP_URL, timeout=10)
+                safe_get(RENDER_APP_URL, timeout=10, retries=1)
         except Exception:
             pass
 
@@ -470,7 +497,7 @@ def setup_telegram_webhook():
         webhook_url = f"{RENDER_APP_URL}/{TELEGRAM_BOT_TOKEN}"
         api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={webhook_url}"
         try:
-            requests.get(api_url, timeout=10)
+            safe_get(api_url, timeout=10, retries=2)
         except Exception:
             pass
 
@@ -498,17 +525,19 @@ def get_wallet_spl_tokens(wallet_address):
                     {"encoding": "jsonParsed"}
                 ]
             }
-            res = requests.post(rpc_url, json=payload, timeout=6).json()
-            if "result" in res and "value" in res["result"]:
-                accounts = res["result"]["value"]
-                for acc in accounts:
-                    info = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
-                    mint = info.get("mint")
-                    token_amount = info.get("tokenAmount", {})
-                    ui_amount = float(token_amount.get("uiAmount", 0) or 0)
-                    if ui_amount > 0:
-                        if not any(t["mint"] == mint for t in tokens_data):
-                            tokens_data.append({"mint": mint, "amount": ui_amount})
+            res = safe_post(rpc_url, json_data=payload, timeout=8, retries=2)
+            if res and res.status_code == 200:
+                data = res.json()
+                if "result" in data and "value" in data["result"]:
+                    accounts = data["result"]["value"]
+                    for acc in accounts:
+                        info = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                        mint = info.get("mint")
+                        token_amount = info.get("tokenAmount", {})
+                        ui_amount = float(token_amount.get("uiAmount", 0) or 0)
+                        if ui_amount > 0:
+                            if not any(t["mint"] == mint for t in tokens_data):
+                                tokens_data.append({"mint": mint, "amount": ui_amount})
         except Exception as e:
             print(f"Token Fetch Error for {prog_id}: {e}")
             
@@ -523,8 +552,8 @@ def get_token_symbol_and_price(mint):
 
     try:
         token_info_url = f"https://tokens.jup.ag/token/{mint}"
-        res = requests.get(token_info_url, timeout=3)
-        if res.status_code == 200:
+        res = safe_get(token_info_url, timeout=5, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             if data and "symbol" in data:
                 symbol = data["symbol"]
@@ -533,8 +562,8 @@ def get_token_symbol_and_price(mint):
 
     try:
         jup_url = f"https://price.jup.ag/v4/price?ids={mint}"
-        res = requests.get(jup_url, timeout=3)
-        if res.status_code == 200:
+        res = safe_get(jup_url, timeout=5, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             price_data = data.get("data", {}).get(mint, {})
             p = price_data.get("price")
@@ -545,8 +574,8 @@ def get_token_symbol_and_price(mint):
 
     try:
         dex_url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
-        res = requests.get(dex_url, timeout=3)
-        if res.status_code == 200:
+        res = safe_get(dex_url, timeout=5, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             pairs = data.get("pairs", [])
             if pairs:
@@ -562,8 +591,8 @@ def get_token_symbol_and_price(mint):
 def tool_fetch_real_market_data_with_price():
     try:
         url = "https://api.binance.com/api/v3/ticker/24hr?symbol=SOLUSDT"
-        res = requests.get(url, timeout=4)
-        if res.status_code == 200:
+        res = safe_get(url, timeout=6, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             price = float(data.get("lastPrice", 0))
             change = float(data.get("priceChangePercent", 0))
@@ -573,8 +602,8 @@ def tool_fetch_real_market_data_with_price():
 
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true"
-        res = requests.get(url, timeout=4)
-        if res.status_code == 200:
+        res = safe_get(url, timeout=6, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             price = float(data.get("solana", {}).get("usd", 0))
             change = float(data.get("solana", {}).get("usd_24h_change", 0))
@@ -619,14 +648,16 @@ def tool_check_real_incoming_transactions():
             "params": [pubkey_str, {"limit": 1}]
         }
         rpc_url = get_fastest_rpc()
-        res = requests.post(rpc_url, json=payload, timeout=6).json()
-        if "result" in res and res["result"]:
-            sig_info = res["result"][0]
-            sig = sig_info.get("signature", "N/A")
-            slot = sig_info.get("slot", "N/A")
-            err = sig_info.get("err")
-            status = "Success 🟢" if err is None else "Failed 🔴"
-            return f"Signature: `{sig[:16]}...` | Slot: {slot} | Status: {status}"
+        res = safe_post(rpc_url, json_data=payload, timeout=8, retries=2)
+        if res and res.status_code == 200:
+            data = res.json()
+            if "result" in data and data["result"]:
+                sig_info = data["result"][0]
+                sig = sig_info.get("signature", "N/A")
+                slot = sig_info.get("slot", "N/A")
+                err = sig_info.get("err")
+                status = "Success 🟢" if err is None else "Failed 🔴"
+                return f"Signature: `{sig[:16]}...` | Slot: {slot} | Status: {status}"
         return "No recent transactions found on-chain."
     except Exception as e:
         return f"Error fetching transactions: {str(e)[:25]}"
@@ -646,44 +677,48 @@ def tool_fetch_multiple_real_transactions_with_usd(limit=10):
             "method": "getSignaturesForAddress",
             "params": [pubkey_str, {"limit": limit}]
         }
-        res = requests.post(rpc_url, json=payload, timeout=6).json()
-        if "result" in res and res["result"]:
-            sigs = res["result"]
-            tx_list = []
-            for idx, sig_info in enumerate(sigs, 1):
-                sig = sig_info.get("signature", "N/A")
-                slot = sig_info.get("slot", "N/A")
-                err = sig_info.get("err")
-                status = "Success 🟢" if err is None else "Failed 🔴"
+        res = safe_post(rpc_url, json_data=payload, timeout=8, retries=2)
+        if res and res.status_code == 200:
+            data = res.json()
+            if "result" in data and data["result"]:
+                sigs = data["result"]
+                tx_list = []
+                for idx, sig_info in enumerate(sigs, 1):
+                    sig = sig_info.get("signature", "N/A")
+                    slot = sig_info.get("slot", "N/A")
+                    err = sig_info.get("err")
+                    status = "Success 🟢" if err is None else "Failed 🔴"
 
-                sol_transferred = 0.0
-                try:
-                    tx_payload = {
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "getTransaction",
-                        "params": [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}]
-                    }
-                    tx_res = requests.post(rpc_url, json=tx_payload, timeout=3).json()
-                    if "result" in tx_res and tx_res["result"]:
-                        meta = tx_res["result"].get("meta", {})
-                        pre_balances = meta.get("preBalances", [0])
-                        post_balances = meta.get("postBalances", [0])
-                        if pre_balances and post_balances:
-                            diff = abs(pre_balances[0] - post_balances[0]) / 1000000000.0
-                            sol_transferred = diff
-                except Exception:
-                    pass
+                    sol_transferred = 0.0
+                    try:
+                        tx_payload = {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "getTransaction",
+                            "params": [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}]
+                        }
+                        tx_res = safe_post(rpc_url, json_data=tx_payload, timeout=5, retries=1)
+                        if tx_res and tx_res.status_code == 200:
+                            tx_data = tx_res.json()
+                            if "result" in tx_data and tx_data["result"]:
+                                meta = tx_data["result"].get("meta", {})
+                                pre_balances = meta.get("preBalances", [0])
+                                post_balances = meta.get("postBalances", [0])
+                                if pre_balances and post_balances:
+                                    diff = abs(pre_balances[0] - post_balances[0]) / 1000000000.0
+                                    sol_transferred = diff
+                    except Exception:
+                        pass
 
-                usd_value = sol_transferred * sol_price
+                    usd_value = sol_transferred * sol_price
 
-                tx_list.append(
-                    f"{idx}. `[Slot {slot}]`\n"
-                    f"   • Sign: `{sig[:18]}...`\n"
-                    f"   • Vol: `~{sol_transferred:.4f} SOL` (`~${usd_value:.2f} USD`)\n"
-                    f"   • Status: {status}"
-                )
-            return "\n\n".join(tx_list)
+                    tx_list.append(
+                        f"{idx}. `[Slot {slot}]`\n"
+                        f"   • Sign: `{sig[:18]}...`\n"
+                        f"   • Vol: `~{sol_transferred:.4f} SOL` (`~${usd_value:.2f} USD`)\n"
+                        f"   • Status: {status}"
+                    )
+                return "\n\n".join(tx_list)
         return "⚠️ No recent transactions found on-chain."
     except Exception as e:
         return f"❌ Error fetching transactions: {str(e)[:40]}"
@@ -693,41 +728,31 @@ def tool_fetch_multiple_real_transactions_with_usd(limit=10):
 # ==========================================
 def analyze_data_with_custom_ai(transaction_details):
     try:
-        headers = {
-            "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
         payload = {
             "api_key": CUSTOM_AI_API_KEY,
             "task": "analyze_solana_transaction_or_wallet",
             "data": transaction_details,
             "instructions": "Analyze this blockchain context. Return a short verdict: SAFE or DANGEROUS."
         }
-        
-        response = requests.post(CUSTOM_AI_API_URL, json=payload, headers=headers, timeout=6)
-        if response.status_code == 200:
+        response = safe_post(CUSTOM_AI_API_URL, json_data=payload, timeout=8, retries=1)
+        if response and response.status_code == 200:
             ai_res = response.json()
             return ai_res.get("analysis", "AI processed, status: Safe.")
         else:
-            return f"🛡️ AI Guard Active: No critical on-chain anomalies found (API Status: {response.status_code})"
+            return f"🛡️ AI Guard Active: No critical on-chain anomalies found (API Status: {response.status_code if response else 'Timeout'})"
     except Exception as e:
         return f"🛡️ AI Guard Active: Secure local monitoring operational."
 
 def evaluate_trade_opportunity_with_ai(token_info):
     try:
-        headers = {
-            "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
         payload = {
             "api_key": CUSTOM_AI_API_KEY,
             "task": "evaluate_token_trade",
             "data": token_info,
             "instructions": "Analyze this Solana token for high-probability trading. Return your decision strictly starting with either 'BUY' or 'SKIP', followed by a short reason."
         }
-        
-        response = requests.post(CUSTOM_AI_API_URL, json=payload, headers=headers, timeout=6)
-        if response.status_code == 200:
+        response = safe_post(CUSTOM_AI_API_URL, json_data=payload, timeout=8, retries=1)
+        if response and response.status_code == 200:
             ai_res = response.json()
             analysis = ai_res.get("analysis", "SKIP: No clear bullish signal.")
             return analysis
@@ -742,8 +767,8 @@ def evaluate_trade_opportunity_with_ai(token_info):
 def check_rugpull_security(mint):
     try:
         url = f"https://api.rugcheck.xyz/v1/tokens/{mint}/report"
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
+        res = safe_get(url, timeout=8, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             risks = data.get("risks", [])
             for risk in risks:
@@ -763,22 +788,22 @@ def check_rugpull_security(mint):
 # ==========================================
 def calculate_dynamic_slippage(liquidity_usd):
     if liquidity_usd < 20000:
-        return 150 # 1.5%
+        return 150 
     elif liquidity_usd < 100000:
-        return 100 # 1.0%
+        return 100 
     else:
-        return 50  # 0.5%
+        return 50  
 
 def simulate_trade_opportunity(mint, amount_lamports, liquidity_usd):
     try:
-        input_mint = "So11111111111111111111111111111111111111112" # SOL
+        input_mint = "So11111111111111111111111111111111111111112" 
         slippage_bps = calculate_dynamic_slippage(liquidity_usd)
         
         quote_url = f"https://quote-api.jup.ag/v6/quote?inputMint={input_mint}&outputMint={mint}&amount={amount_lamports}&slippageBps={slippage_bps}"
         
-        res = requests.get(quote_url, timeout=5)
-        if res.status_code != 200:
-            return False, f"Simulation Failed: Jupiter Quote API error (Status: {res.status_code})"
+        res = safe_get(quote_url, timeout=8, retries=2)
+        if not res or res.status_code != 200:
+            return False, f"Simulation Failed: Jupiter Quote API error"
             
         quote_data = res.json()
         out_amount = float(quote_data.get("outAmount", 0))
@@ -797,10 +822,6 @@ def simulate_trade_opportunity(mint, amount_lamports, liquidity_usd):
             "route_plan_steps": len(quote_data.get("routePlan", []))
         }
         
-        headers = {
-            "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
         ai_payload = {
             "api_key": CUSTOM_AI_API_KEY,
             "task": "simulate_trade_risk_reward",
@@ -808,8 +829,8 @@ def simulate_trade_opportunity(mint, amount_lamports, liquidity_usd):
             "instructions": "Simulate this trade. Return strictly 'PROFITABLE' if safe to proceed, or 'HIGH_RISK' if it should be avoided."
         }
         
-        ai_res = requests.post(CUSTOM_AI_API_URL, json=ai_payload, headers=headers, timeout=6)
-        if ai_res.status_code == 200:
+        ai_res = safe_post(CUSTOM_AI_API_URL, json_data=ai_payload, timeout=8, retries=1)
+        if ai_res and ai_res.status_code == 200:
             verdict = ai_res.json().get("analysis", "PROFITABLE")
             if "HIGH_RISK" in verdict.upper() or "DANGEROUS" in verdict.upper():
                 update_agent_learning("Simulation_Risk_Manager", False, "AI simulation flagged high risk")
@@ -865,10 +886,10 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
         wallet_address = str(keypair.pubkey())
         
         quote_url = f"https://quote-api.jup.ag/v6/quote?inputMint={input_mint}&outputMint={output_mint}&amount={amount_lamports}&slippageBps={slippage_bps}"
-        quote_res = requests.get(quote_url, timeout=5)
-        if quote_res.status_code != 200:
+        quote_res = safe_get(quote_url, timeout=8, retries=2)
+        if not quote_res or quote_res.status_code != 200:
             update_agent_learning("Jupiter_Real_Swap_Engine", False, "Quote API failed")
-            return f"⚠️ Jupiter Quote Failed (Status: {quote_res.status_code})"
+            return f"⚠️ Jupiter Quote Failed"
             
         quote_data = quote_res.json()
         
@@ -878,10 +899,10 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
             "userPublicKey": wallet_address,
             "wrapAndUnwrapSol": True
         }
-        swap_res = requests.post(swap_url, json=payload, timeout=6)
-        if swap_res.status_code != 200:
+        swap_res = safe_post(swap_url, json_data=payload, timeout=8, retries=2)
+        if not swap_res or swap_res.status_code != 200:
             update_agent_learning("Jupiter_Real_Swap_Engine", False, "Swap transaction build failed")
-            return f"⚠️ Swap Transaction Build Failed (Status: {swap_res.status_code})"
+            return f"⚠️ Swap Transaction Build Failed"
             
         swap_data = swap_res.json()
         swap_tx_base64 = swap_data.get("swapTransaction")
@@ -906,15 +927,18 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
             ]
         }
         
-        broadcast_res = requests.post(rpc_url, json=send_payload, timeout=8).json()
-        if "result" in broadcast_res:
-            tx_sig = broadcast_res["result"]
-            update_agent_learning("Jupiter_Real_Swap_Engine", True)
-            return f"✅ **Jupiter Swap Executed Successfully!**\n• Signature: `{tx_sig[:18]}...`\n• View on Solscan: [Check Tx](https://solscan.io/tx/{tx_sig})"
-        else:
-            err_msg = broadcast_res.get("error", {}).get("message", "Unknown error")
-            update_agent_learning("Jupiter_Real_Swap_Engine", False, err_msg)
-            return f"⚠️ Swap Execution Rejected by Network: {err_msg[:60]}"
+        broadcast_res = safe_post(rpc_url, json_data=send_payload, timeout=10, retries=2)
+        if broadcast_res and broadcast_res.status_code == 200:
+            broadcast_data = broadcast_res.json()
+            if "result" in broadcast_data:
+                tx_sig = broadcast_data["result"]
+                update_agent_learning("Jupiter_Real_Swap_Engine", True)
+                return f"✅ **Jupiter Swap Executed Successfully!**\n• Signature: `{tx_sig[:18]}...`\n• View on Solscan: [Check Tx](https://solscan.io/tx/{tx_sig})"
+            else:
+                err_msg = broadcast_data.get("error", {}).get("message", "Unknown error")
+                update_agent_learning("Jupiter_Real_Swap_Engine", False, err_msg)
+                return f"⚠️ Swap Execution Rejected by Network: {err_msg[:60]}"
+        return "⚠️ Swap Broadcast Network Timeout"
             
     except Exception as e:
         update_agent_learning("Jupiter_Real_Swap_Engine", False, str(e))
@@ -998,8 +1022,8 @@ def track_and_execute_trailing_tpsl():
 def fetch_trending_solana_tokens():
     try:
         url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
+        res = safe_get(url, timeout=8, retries=2)
+        if res and res.status_code == 200:
             data = res.json()
             pairs = data.get("pairs", [])
             valid_tokens = []
@@ -1096,13 +1120,13 @@ def run_autonomous_solana_ai_brain():
 
                     send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *RugCheck Passed!*\n🧪 *Initiating Dynamic Simulation...*")
                     
-                    amount_lamports = 10000000 # 0.01 SOL
+                    amount_lamports = 10000000 
                     sim_success, sim_message = simulate_trade_opportunity(mint, amount_lamports, liquidity)
                     
                     if sim_success:
                         send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *Simulation Successful!*\n{sim_message}\n\n⚡ *Executing Real Jupiter Swap via Fast RPC...*")
                         
-                        input_mint = "So11111111111111111111111111111111111111112" # SOL
+                        input_mint = "So11111111111111111111111111111111111111112" 
                         slippage = calculate_dynamic_slippage(liquidity)
                         swap_result = execute_real_jupiter_swap(input_mint, mint, amount_lamports, slippage)
                         
