@@ -40,8 +40,8 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (Full SPL Token & USD Portfolio Agent)"
-current_active_order = "Mission: Multi-token tracking, USD portfolio valuation, and secure audit."
+bot_status = "Active 🟢 (Jupiter & Dexscreener Multi-Token Valuation Agent)"
+current_active_order = "Mission: Multi-token tracking, Jupiter/Dexscreener USD valuation, and secure audit."
 is_bot_running = True
 
 # --- SQLite Database Setup for Secure Logging ---
@@ -84,7 +84,7 @@ MEMORY_FILE = "persistent_agent_memory.json"
 default_memory_data = {
     "strategy_pool": {
         "Real_OnChain_Monitor": {"weight": 2.5, "success": 0, "fail": 0},
-        "SPL_Token_Valuation": {"weight": 3.0, "success": 0, "fail": 0},
+        "Jupiter_Multi_Token_Valuation": {"weight": 3.2, "success": 0, "fail": 0},
         "Jupiter_Swap_Engine": {"weight": 3.0, "success": 0, "fail": 0}
     },
     "agent_memory": {
@@ -132,7 +132,7 @@ def send_telegram_message(chat_id, text_message):
 
 @app.route('/')
 def home():
-    return "🤖 Full SPL Token & USD Portfolio Autonomous Solana Agent is Active!"
+    return "🤖 Jupiter & Dexscreener Multi-Token Solana Agent is Active!"
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
@@ -146,13 +146,13 @@ def telegram_webhook():
 
             if text.startswith("/start"):
                 welcome_text = (
-                    "🚀 *Full SPL Token & USD Portfolio Agent Activated!*\n\n"
-                    "🔍 *Mode:* Multi-Token USD Valuation, SPL Audit & AI Guard.\n\n"
+                    "🚀 *Jupiter Multi-Token Portfolio Agent Activated!*\n\n"
+                    "🔍 *Mode:* Multi-Token USD Valuation, Jupiter API & AI Guard.\n\n"
                     "Commands:\n"
-                    "📊 `/status` - Complete portfolio valuation & system state\n"
-                    "💰 `/balance` - Live balance of SOL & all SPL tokens\n"
+                    "📊 `/status` - Complete multi-token valuation & system state\n"
+                    "💰 `/balance` - Live balance of SOL & all SPL assets\n"
                     "📜 `/trans` - View first 10 transactions with USD value\n"
-                    "📈 `/scan` - Multi-API market price & token scan\n"
+                    "📈 `/scan` - Jupiter price API & token scan\n"
                     "⚡ `/swap` - Test DEX execution check\n"
                     "🛑 `/stop` - Pause agent operations\n"
                     "✍️ `Order: [your command]` - Update operational focus"
@@ -213,7 +213,7 @@ def telegram_webhook():
                 ai_verdict = analyze_data_with_custom_ai(ai_context)
                 
                 scan_result = f"{market_msg}\n• **Total Portfolio:** `${portfolio_usd:.2f} USD`\n\n🧠 *AI Security & Market Verdict:*\n{ai_verdict}"
-                send_telegram_message(chat_id, f"🔍 *Multi-API Market & SPL Asset Scan*\n\n{scan_result}")
+                send_telegram_message(chat_id, f"🔍 *Jupiter Price & SPL Asset Scan*\n\n{scan_result}")
 
             elif text.startswith("/swap"):
                 swap_result = execute_jupiter_swap_test()
@@ -297,7 +297,7 @@ def get_real_solana_wallet_details():
 
 def get_wallet_spl_tokens(wallet_address):
     """
-    ওয়ালেটের সমস্ত SPL টোকেন (USDC, PUMP, MOON ইত্যাদি) ব্লকচেইন থেকে স্ক্যান করে।
+    ওয়ালেটের সমস্ত SPL টোকেন ব্লকচেইন থেকে স্ক্যান করে।
     """
     tokens_data = []
     try:
@@ -332,13 +332,28 @@ def get_wallet_spl_tokens(wallet_address):
 
 def get_token_price_usd(mint):
     """
-    Dexscreener API ব্যবহার করে নির্দিষ্ট টোকেনের লাইভ USD মূল্য ফেচ করে।
+    প্রথমে Jupiter Price API ব্যবহার করবে; সেখানে না পেলে Dexscreener API ব্যবহার করে লাইভ মূল্য ফেচ করবে।
     """
     if mint == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": # USDC
         return 1.0
+
+    # ১. Jupiter Price API চেষ্টা করা
     try:
-        url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
-        res = requests.get(url, timeout=4)
+        jup_url = f"https://price.jup.ag/v4/price?ids={mint}"
+        res = requests.get(jup_url, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            price_data = data.get("data", {}).get(mint, {})
+            price = price_data.get("price")
+            if price is not None:
+                return float(price)
+    except Exception:
+        pass
+
+    # ২. Dexscreener API ফলব্যাক চেষ্টা করা
+    try:
+        dex_url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
+        res = requests.get(dex_url, timeout=4)
         if res.status_code == 200:
             data = res.json()
             pairs = data.get("pairs", [])
@@ -347,6 +362,7 @@ def get_token_price_usd(mint):
                 return float(price_str or 0)
     except Exception:
         pass
+
     return 0.0
 
 def tool_fetch_real_market_data_with_price():
@@ -372,11 +388,11 @@ def tool_fetch_real_market_data_with_price():
     except Exception:
         pass
 
-    return False, "• **Network Status:** Connected\n• **Market Feed:** APIs temporarily limited.", 130.0 # ডিফল্ট ব্যাকআপ প্রাইস
+    return False, "• **Network Status:** Connected\n• **Market Feed:** APIs temporarily limited.", 130.0
 
 def get_wallet_portfolio_value():
     """
-    সোলানা এবং ওয়ালেটের সকল SPL টোকেন (USDC, PUMP, MOON ইত্যাদি) হিসাব করে মোট USD পোর্টফোলিও ভ্যালু বের করে।
+    সোলানা এবং ওয়ালেটের সকল SPL টোকেন (USDC, Pump.fun, Space Dog ইত্যাদি) জুপিটার ও ডেক্সস্ক্রিনার এপিআই দিয়ে হিসাব করে মোট সঠিক USD পোর্টফোলিও বের করে।
     """
     wallet_address, balance_sol = get_real_solana_wallet_details()
     _, _, sol_price = tool_fetch_real_market_data_with_price()
@@ -584,10 +600,10 @@ def evaluate_real_system_state(balance_sol):
         f"{market_msg}\n"
         f"• **Total Portfolio USD:** `${portfolio_usd:.2f} USD`\n"
         f"• **Latest Transaction Log:** {tx_status}\n"
-        f"• **Execution Mode:** Multi-Token SPL Tracking Active."
+        f"• **Execution Mode:** Jupiter Multi-Token Valuation Active."
     )
     
-    log_to_db(balance_sol, "SPL_Portfolio_System_Active", portfolio_usd)
+    log_to_db(balance_sol, "Jupiter_Valuation_Active", portfolio_usd)
     return state_report
 
 # --- Autonomous Background Worker ---
