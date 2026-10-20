@@ -83,7 +83,6 @@ def save_npoint_bin_id(bin_id):
         pass
 
 def load_persistent_memory():
-    # 1. Try loading from Local JSON File (Built-in Memory)
     if os.path.exists(LOCAL_MEMORY_FILE):
         try:
             with open(LOCAL_MEMORY_FILE, "r") as f:
@@ -92,7 +91,6 @@ def load_persistent_memory():
         except Exception as e:
             print(f"Local Memory Load Error: {e}")
 
-    # 2. Fallback / Sync from Key-less Cloud Backup (npoint.io)
     bin_id = get_npoint_bin_id()
     if bin_id:
         try:
@@ -108,18 +106,15 @@ def load_persistent_memory():
 def save_persistent_memory(s_pool, a_memory):
     full_data = {"strategy_pool": s_pool, "agent_memory": a_memory}
     
-    # Save Locally (Built-in Memory)
     try:
         with open(LOCAL_MEMORY_FILE, "w") as f:
             json.dump(full_data, f, indent=4)
     except Exception as e:
         print(f"Local Memory Save Error: {e}")
 
-    # Save to Key-less Cloud Backup (npoint.io)
     try:
         bin_id = get_npoint_bin_id()
         if not bin_id:
-            # Create a new key-less bin
             res = requests.post("https://api.npoint.io", json=full_data, timeout=6)
             if res and res.status_code in [200, 201]:
                 res_json = res.json()
@@ -127,7 +122,6 @@ def save_persistent_memory(s_pool, a_memory):
                 if new_id:
                     save_npoint_bin_id(new_id)
         else:
-            # Update existing bin
             requests.put(f"https://api.npoint.io/{bin_id}", json=full_data, timeout=6)
     except Exception as e:
         print(f"Key-less Cloud Backup Sync Error: {e}")
@@ -445,7 +439,6 @@ def track_and_execute_trailing_tpsl():
     try:
         positions = agent_memory.get("active_positions", [])
         for pos in positions:
-            # Trailing & TP/SL check logic
             pass
     except Exception as e:
         print(f"TP/SL Error: {e}")
@@ -459,7 +452,6 @@ def run_autonomous_solana_ai_brain():
                 continue
         try:
             track_and_execute_trailing_tpsl()
-            # Periodic memory checkpoint sync to key-less backup
             save_persistent_memory(strategy_pool, agent_memory)
             time.sleep(300)
         except Exception as e:
@@ -489,6 +481,9 @@ if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     threading.Thread(target=self_ping_worker, daemon=True).start()
     threading.Thread(target=setup_telegram_webhook, daemon=True).start()
-    threading.Thread(target=ai_brain_thread := threading.Thread(target=run_autonomous_solana_ai_brain, daemon=True)).start()
+    
+    # Corrected Thread Initialization
+    ai_brain_thread = threading.Thread(target=run_autonomous_solana_ai_brain, daemon=True)
+    ai_brain_thread.start()
 
     ai_brain_thread.join()
