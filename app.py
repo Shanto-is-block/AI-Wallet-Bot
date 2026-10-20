@@ -16,18 +16,22 @@ from solders.hash import Hash
 import base58
 
 # --- Configuration & Credentials ---
-TELEGRAM_BOT_TOKEN = "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA"      
-TELEGRAM_CHAT_ID = "7363218232"
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA")      
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
-# Solana Wallet Private Key
-SOLANA_PRIVATE_KEY_BASE58 = "4YEgMCUoSSSR7TE7LGfV4PW3757JRmzvBVbGP4uNFGwCq5ddzfkmiBDPcGL5LqNmLj8CwyTsptzjwXUuSxVYwyBX"      
+# Default Solana Wallet Private Key from Environment
+DEFAULT_SOLANA_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
+
+# Runtime Dynamic Wallet Key Storage (For /reenter feature)
+runtime_private_key = DEFAULT_SOLANA_PRIVATE_KEY
+user_states = {} # chat_id -> state string
 
 # Render Web Service Public URL
-RENDER_APP_URL = "https://ai-wallet-bot-yy4i.onrender.com" 
+RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.onrender.com") 
 
 # Custom AI API Configuration
-CUSTOM_AI_API_URL = "https://ai-api-cgzb.onrender.com"
-CUSTOM_AI_API_KEY = "ai_key_1762b5a10bdc7ed4a5db091d"
+CUSTOM_AI_API_URL = os.environ.get("CUSTOM_AI_API_URL", "https://ai-api-cgzb.onrender.com")
+CUSTOM_AI_API_KEY = os.environ.get("CUSTOM_AI_API_KEY", "ai_key_1762b5a10bdc7ed4a5db091d")
 
 # Free Public Solana RPC URLs
 SOLANA_RPC_URLS = [
@@ -144,7 +148,7 @@ def send_telegram_message(chat_id, text_message):
     except Exception as e:
         print(f"Telegram Send Error: {e}")
 
-# --- 🚀 NEW: Smart RPC Speed Selector (ফাস্টেস্ট আরপিসি খোঁজার কোড) ---
+# --- Smart RPC Speed Selector ---
 def get_fastest_rpc():
     fastest_rpc = SOLANA_RPC_URLS[0]
     min_latency = float('inf')
@@ -168,14 +172,39 @@ def home():
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
-    global current_active_order, bot_status
+    global current_active_order, bot_status, runtime_private_key, user_states
     try:
         data = flask_request.get_json()
         if "message" in data:
             message = data["message"]
             chat_id = message["chat"]["id"]
-            text = message.get("text", "").strip().lower()
+            raw_text = message.get("text", "").strip()
+            text = raw_text.lower()
 
+            # --- 🔄 State Management: Check if waiting for new Private Key ---
+            if user_states.get(chat_id) == "WAITING_FOR_PRIVATE_KEY":
+                if text.startswith("/cancel"):
+                    user_states[chat_id] = None
+                    send_telegram_message(chat_id, "❌ Wallet update cancelled. Previous wallet remains connected.")
+                    return "OK", 200
+                
+                new_key = raw_text
+                try:
+                    test_bytes = base58.b58decode(new_key)
+                    test_kp = Keypair.from_bytes(test_bytes)
+                    new_pubkey = str(test_kp.pubkey())
+                    
+                    with data_lock:
+                        runtime_private_key = new_key
+                        user_states[chat_id] = None
+                    
+                    wallet_address, balance_sol = get_real_solana_wallet_details()
+                    send_telegram_message(chat_id, f"✅ *Previous wallet disconnected successfully!*\n🔌 *New Wallet Connected!*\n\n👛 *Address:* `{wallet_address}`\n💰 *SOL Balance:* `{balance_sol:.4f} SOL`")
+                except Exception as e:
+                    send_telegram_message(chat_id, f"❌ *Invalid Private Key!* Please check and send again correctly, or type `/cancel` to abort.\nError: `{str(e)[:35]}`")
+                return "OK", 200
+
+            # --- Standard Commands ---
             if text.startswith("/start"):
                 welcome_text = (
                     "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
@@ -186,10 +215,18 @@ def telegram_webhook():
                     "📜 `/trans` - View first 10 transactions with USD value\n"
                     "📈 `/scan` - Jupiter price API & token scan\n"
                     "⚡ `/swap` - Execute manual test swap (0.01 SOL to USDC)\n"
+                    "🔄 `/reenter` - Disconnect current wallet & connect a new Private Key\n"
                     "🛑 `/stop` - Pause autonomous operations\n"
                     "✍️ `Order: [your command]` - Update operational focus"
                 )
                 send_telegram_message(chat_id, welcome_text)
+
+            elif text.startswith("/reenter"):
+                user_states[chat_id] = "WAITING_FOR_PRIVATE_KEY"
+                send_telegram_message(chat_id, "🔄 *Wallet Re-entry Mode Activated*\n\nPlease reply with your **new Solana Private Key (Base58)**.\n*(Your previous wallet will be disconnected immediately upon verification.)*\n\nType `/cancel` if you want to abort.")
+
+            elif text.startswith("/cancel"):
+                send_telegram_message(chat_id, "ℹ️ No active operation to cancel.")
 
             elif text.startswith("/status"):
                 wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
@@ -258,7 +295,7 @@ def telegram_webhook():
                 send_telegram_message(chat_id, "🛑 Autonomous agent operations paused successfully.")
 
             elif text.startswith("order:"):
-                custom_order = message.get("text", "")[6:].strip()
+                custom_order = raw_text[6:].strip()
                 with data_lock:
                     current_active_order = custom_order
                 send_telegram_message(chat_id, f"✅ New operational mission set: {custom_order}")
@@ -295,8 +332,12 @@ def setup_telegram_webhook():
             pass
 
 def get_solana_keypair():
+    global runtime_private_key
     try:
-        secret_key_bytes = base58.b58decode(SOLANA_PRIVATE_KEY_BASE58)
+        if not runtime_private_key:
+            print("❌ Error: Solana Private Key is missing!")
+            return None
+        secret_key_bytes = base58.b58decode(runtime_private_key)
         return Keypair.from_bytes(secret_key_bytes)
     except Exception as e:
         print(f"Keypair Error: {e}")
@@ -607,7 +648,6 @@ def check_rugpull_security(mint):
 # --- 🧪 DYNAMIC SLIPPAGE & SIMULATION ENGINE ---
 # ==========================================
 def calculate_dynamic_slippage(liquidity_usd):
-    # লিকুইডিটি কম হলে স্লিপেজ একটু বাড়িয়ে দিবে (মিম কয়েনের জন্য), বেশি হলে কমাবে
     if liquidity_usd < 20000:
         return 150 # 1.5%
     elif liquidity_usd < 100000:
@@ -686,7 +726,6 @@ def update_agent_learning(strategy_name, is_success, error_message=""):
                 })
         save_persistent_memory(strategy_pool, agent_memory)
 
-# --- 🚀 NEW: Auto-Blacklisting Function ---
 def add_to_blacklist(mint, reason):
     with data_lock:
         if mint not in agent_memory["blacklisted_tokens"]:
@@ -801,7 +840,6 @@ def track_and_execute_trailing_tpsl():
             total_pnl_pct = ((current_price - buy_price) / buy_price) * 100
             drawdown_from_peak = ((highest_price - current_price) / highest_price) * 100
 
-            # টেক-প্রোফিট (+৪০%)
             if total_pnl_pct >= 40.0:
                 send_telegram_message(TELEGRAM_CHAT_ID, f"🎯 *Take-Profit Target Hit!*\n• Token: `{symbol}`\n• Total Profit: `+{total_pnl_pct:.2f}%`\n⚡ *Selling to lock profits...*")
                 
@@ -818,7 +856,6 @@ def track_and_execute_trailing_tpsl():
                 conn.commit()
                 conn.close()
 
-            # ট্রেইলিং স্টপ-লস অথবা ফিক্সড স্টপ-লস (-১৫% হিট হলে অটো ব্ল্যাকলিস্টে যুক্ত করবে)
             elif drawdown_from_peak >= 15.0 or total_pnl_pct <= -15.0:
                 reason = f"Trailing Drop (-{drawdown_from_peak:.2f}% from peak)" if drawdown_from_peak >= 15.0 else f"Fixed Stop-Loss ({total_pnl_pct:.2f}%)"
                 send_telegram_message(TELEGRAM_CHAT_ID, f"🛡️ *Trailing Stop-Loss Triggered!*\n• Token: `{symbol}`\n• Reason: {reason}\n• Final PnL: `{total_pnl_pct:.2f}%`\n⚡ *Executing Sell...*")
@@ -830,7 +867,6 @@ def track_and_execute_trailing_tpsl():
                 send_telegram_message(TELEGRAM_CHAT_ID, f"🛑 *Stop-Loss Execution:*\n{sell_result}")
                 update_agent_learning("Trailing_TP_SL_Engine", False, reason)
                 
-                # লস করা টোকেনটি ভবিষ্যতে এড়ানোর জন্য স্বয়ংক্রিয়ভাবে ব্ল্যাকলিস্টে যুক্ত করা হলো
                 add_to_blacklist(mint, f"Hit Stop-Loss at {total_pnl_pct:.2f}%")
                 
                 conn = sqlite3.connect(DB_FILE)
@@ -861,7 +897,6 @@ def fetch_trending_solana_tokens():
                     liquidity = pair.get("liquidity", {}).get("usd", 0)
                     volume_24h = pair.get("volume", {}).get("h24", 0)
                     
-                    # ইতিমধ্যে ব্ল্যাকলিস্টে থাকা টোকেন ফিল্টার আউট করা
                     if mint and liquidity > 5000 and mint not in agent_memory.get("blacklisted_tokens", []):
                         valid_tokens.append({
                             "mint": mint,
@@ -911,7 +946,6 @@ def run_autonomous_solana_ai_brain():
         try:
             wallet_address, balance_sol, portfolio_usd, _, _ = get_wallet_portfolio_value()
             
-            # ১. ট্রেইলিং স্টপ-লস এবং টেক-প্রোফিট চেক করা
             track_and_execute_trailing_tpsl()
 
             if balance_sol < 0.05:
@@ -919,7 +953,6 @@ def run_autonomous_solana_ai_brain():
                 time.sleep(600)
                 continue
 
-            # ২. ট্রেন্ডিং টোকেন স্ক্যান করা (ব্ল্যাকলিস্ট ফিল্টারসহ)
             trending_tokens = fetch_trending_solana_tokens()
             trade_executed = False
 
@@ -931,13 +964,11 @@ def run_autonomous_solana_ai_brain():
                 if mint in agent_memory.get("blacklisted_tokens", []):
                     continue
 
-                # ৩. এআই মূল্যায়নের জন্য পাঠানো
                 ai_verdict = evaluate_trade_opportunity_with_ai(token)
                 
                 if ai_verdict.strip().upper().startswith("BUY"):
                     send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Trade Signal BUY Detected!*\n• Token: `{symbol}`\n• Verdict: {ai_verdict}\n\n🛡️ *Checking RugCheck Smart Contract Security...*")
                     
-                    # ৪. RugCheck সিকিউরিটি ভেরিফিকেশন
                     rug_safe, rug_msg = check_rugpull_security(mint)
                     if not rug_safe:
                         send_telegram_message(TELEGRAM_CHAT_ID, f"🚫 *RugCheck Blocked Trade!*\n{rug_msg}\n• Action: Automatically blacklisted.")
@@ -946,7 +977,6 @@ def run_autonomous_solana_ai_brain():
 
                     send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *RugCheck Passed!*\n🧪 *Initiating Dynamic Simulation...*")
                     
-                    # ৫. প্রি-ট্রেড সিমুলেশন (লিকুইডিটি ভিত্তিক ডাইনামিক স্লিপেজসহ)
                     amount_lamports = 10000000 # 0.01 SOL
                     sim_success, sim_message = simulate_trade_opportunity(mint, amount_lamports, liquidity)
                     
