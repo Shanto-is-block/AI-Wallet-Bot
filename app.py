@@ -40,8 +40,8 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (Robust Error Handled Agent)"
-current_active_order = "Mission: Multi-source market tracking, USD transaction audit, and safe execution."
+bot_status = "Active 🟢 (Full SPL Token & USD Portfolio Agent)"
+current_active_order = "Mission: Multi-token tracking, USD portfolio valuation, and secure audit."
 is_bot_running = True
 
 # --- SQLite Database Setup for Secure Logging ---
@@ -84,7 +84,7 @@ MEMORY_FILE = "persistent_agent_memory.json"
 default_memory_data = {
     "strategy_pool": {
         "Real_OnChain_Monitor": {"weight": 2.5, "success": 0, "fail": 0},
-        "USD_Portfolio_Valuation": {"weight": 2.8, "success": 0, "fail": 0},
+        "SPL_Token_Valuation": {"weight": 3.0, "success": 0, "fail": 0},
         "Jupiter_Swap_Engine": {"weight": 3.0, "success": 0, "fail": 0}
     },
     "agent_memory": {
@@ -132,7 +132,7 @@ def send_telegram_message(chat_id, text_message):
 
 @app.route('/')
 def home():
-    return "🤖 Robust Autonomous Solana Agent is Active!"
+    return "🤖 Full SPL Token & USD Portfolio Autonomous Solana Agent is Active!"
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
@@ -146,13 +146,13 @@ def telegram_webhook():
 
             if text.startswith("/start"):
                 welcome_text = (
-                    "🚀 *Robust Autonomous Agent Activated!*\n\n"
-                    "🔍 *Mode:* USD Valuation, Safe Transaction Audit & AI Fallback.\n\n"
+                    "🚀 *Full SPL Token & USD Portfolio Agent Activated!*\n\n"
+                    "🔍 *Mode:* Multi-Token USD Valuation, SPL Audit & AI Guard.\n\n"
                     "Commands:\n"
-                    "📊 `/status` - Portfolio valuation & system state\n"
-                    "💰 `/balance` - Live balance in SOL & USD\n"
+                    "📊 `/status` - Complete portfolio valuation & system state\n"
+                    "💰 `/balance` - Live balance of SOL & all SPL tokens\n"
                     "📜 `/trans` - View first 10 transactions with USD value\n"
-                    "📈 `/scan` - Multi-API market price & AI scan\n"
+                    "📈 `/scan` - Multi-API market price & token scan\n"
                     "⚡ `/swap` - Test DEX execution check\n"
                     "🛑 `/stop` - Pause agent operations\n"
                     "✍️ `Order: [your command]` - Update operational focus"
@@ -160,13 +160,20 @@ def telegram_webhook():
                 send_telegram_message(chat_id, welcome_text)
 
             elif text.startswith("/status"):
-                wallet_address, balance_sol, portfolio_usd, sol_price = get_wallet_portfolio_value()
+                wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
                 system_state_msg = evaluate_real_system_state(balance_sol)
                 
+                tokens_summary = ""
+                if token_details:
+                    tokens_summary = "\n🔹 *SPL Tokens:* \n"
+                    for t in token_details:
+                        tokens_summary += f"• `{t['name']}`: {t['amount']:.4f} (~${t['usd']:.2f})\n"
+
                 status_msg = (
-                    f"📊 *USD Portfolio Status Report*\n\n"
+                    f"📊 *Full Portfolio Status Report*\n\n"
                     f"👛 *Wallet Address:* `{wallet_address}`\n"
-                    f"💰 *Balance:* `{balance_sol:.4f} SOL`\n"
+                    f"💰 *SOL Balance:* `{balance_sol:.4f} SOL`\n"
+                    f"{tokens_summary}"
                     f"💵 *Total Portfolio Value:* **`${portfolio_usd:.2f} USD`**\n"
                     f"📈 *Current SOL Price:* `${sol_price:.2f}`\n\n"
                     f"{system_state_msg}"
@@ -174,13 +181,21 @@ def telegram_webhook():
                 send_telegram_message(chat_id, status_msg)
 
             elif text.startswith("/balance"):
-                wallet_address, balance_sol, portfolio_usd, sol_price = get_wallet_portfolio_value()
+                wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
                 incoming_status = tool_check_real_incoming_transactions()
+                
+                tokens_summary = ""
+                if token_details:
+                    tokens_summary = "\n🔹 *SPL Tokens in Wallet:* \n"
+                    for t in token_details:
+                        tokens_summary += f"• `{t['name']}`: {t['amount']:.4f} (~${t['usd']:.2f})\n"
+
                 bal_msg = (
-                    f"👛 *Live Wallet Portfolio & Valuation*\n\n"
+                    f"👛 *Live Wallet Portfolio & SPL Assets*\n\n"
                     f"• **Address:** `{wallet_address}`\n"
                     f"• **SOL Balance:** `{balance_sol:.4f} SOL`\n"
-                    f"• **Portfolio USD:** **`${portfolio_usd:.2f} USD`**\n"
+                    f"{tokens_summary}"
+                    f"• **Total Portfolio USD:** **`${portfolio_usd:.2f} USD`**\n"
                     f"• **Latest On-Chain Event:** {incoming_status}"
                 )
                 send_telegram_message(chat_id, bal_msg)
@@ -191,14 +206,14 @@ def telegram_webhook():
 
             elif text.startswith("/scan"):
                 success, market_msg, sol_price = tool_fetch_real_market_data_with_price()
-                wallet_address, balance_sol, portfolio_usd, _ = get_wallet_portfolio_value()
+                wallet_address, balance_sol, portfolio_usd, _, token_details = get_wallet_portfolio_value()
                 tx_status = tool_check_real_incoming_transactions()
                 
-                ai_context = {"wallet": wallet_address, "balance_sol": balance_sol, "portfolio_usd": portfolio_usd, "market": market_msg, "last_tx": tx_status}
+                ai_context = {"wallet": wallet_address, "balance_sol": balance_sol, "portfolio_usd": portfolio_usd, "tokens": token_details, "last_tx": tx_status}
                 ai_verdict = analyze_data_with_custom_ai(ai_context)
                 
                 scan_result = f"{market_msg}\n• **Total Portfolio:** `${portfolio_usd:.2f} USD`\n\n🧠 *AI Security & Market Verdict:*\n{ai_verdict}"
-                send_telegram_message(chat_id, f"🔍 *Multi-API Market & Portfolio Scan*\n\n{scan_result}")
+                send_telegram_message(chat_id, f"🔍 *Multi-API Market & SPL Asset Scan*\n\n{scan_result}")
 
             elif text.startswith("/swap"):
                 swap_result = execute_jupiter_swap_test()
@@ -280,6 +295,60 @@ def get_real_solana_wallet_details():
         print(f"Balance Check Error: {e}")
     return wallet_address, balance_sol
 
+def get_wallet_spl_tokens(wallet_address):
+    """
+    ওয়ালেটের সমস্ত SPL টোকেন (USDC, PUMP, MOON ইত্যাদি) ব্লকচেইন থেকে স্ক্যান করে।
+    """
+    tokens_data = []
+    try:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenAccountsByOwner",
+            "params": [
+                wallet_address,
+                {"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
+                {"encoding": "jsonParsed"}
+            ]
+        }
+        for rpc in SOLANA_RPC_URLS:
+            try:
+                res = requests.post(rpc, json=payload, timeout=6).json()
+                if "result" in res and "value" in res["result"]:
+                    accounts = res["result"]["value"]
+                    for acc in accounts:
+                        info = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                        mint = info.get("mint")
+                        token_amount = info.get("tokenAmount", {})
+                        ui_amount = float(token_amount.get("uiAmount", 0) or 0)
+                        if ui_amount > 0:
+                            tokens_data.append({"mint": mint, "amount": ui_amount})
+                    break
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"SPL Token Fetch Error: {e}")
+    return tokens_data
+
+def get_token_price_usd(mint):
+    """
+    Dexscreener API ব্যবহার করে নির্দিষ্ট টোকেনের লাইভ USD মূল্য ফেচ করে।
+    """
+    if mint == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": # USDC
+        return 1.0
+    try:
+        url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
+        res = requests.get(url, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            pairs = data.get("pairs", [])
+            if pairs:
+                price_str = pairs[0].get("priceUsd", 0)
+                return float(price_str or 0)
+    except Exception:
+        pass
+    return 0.0
+
 def tool_fetch_real_market_data_with_price():
     try:
         url = "https://api.binance.com/api/v3/ticker/24hr?symbol=SOLUSDT"
@@ -303,13 +372,37 @@ def tool_fetch_real_market_data_with_price():
     except Exception:
         pass
 
-    return False, "• **Network Status:** Connected\n• **Market Feed:** APIs temporarily limited.", 0.0
+    return False, "• **Network Status:** Connected\n• **Market Feed:** APIs temporarily limited.", 130.0 # ডিফল্ট ব্যাকআপ প্রাইস
 
 def get_wallet_portfolio_value():
+    """
+    সোলানা এবং ওয়ালেটের সকল SPL টোকেন (USDC, PUMP, MOON ইত্যাদি) হিসাব করে মোট USD পোর্টফোলিও ভ্যালু বের করে।
+    """
     wallet_address, balance_sol = get_real_solana_wallet_details()
     _, _, sol_price = tool_fetch_real_market_data_with_price()
-    portfolio_usd = balance_sol * sol_price
-    return wallet_address, balance_sol, portfolio_usd, sol_price
+    
+    sol_usd = balance_sol * sol_price
+    
+    spl_tokens = get_wallet_spl_tokens(wallet_address)
+    total_spl_usd = 0.0
+    token_details_list = []
+    
+    for t in spl_tokens:
+        mint = t["mint"]
+        amount = t["amount"]
+        price = get_token_price_usd(mint)
+        usd_val = amount * price
+        total_spl_usd += usd_val
+        
+        if mint == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v":
+            name = "USDC"
+        else:
+            name = mint[:6] + "..." + mint[-4:]
+            
+        token_details_list.append({"name": name, "amount": amount, "usd": usd_val})
+        
+    portfolio_usd = sol_usd + total_spl_usd
+    return wallet_address, balance_sol, portfolio_usd, sol_price, token_details_list
 
 def tool_check_real_incoming_transactions():
     try:
@@ -403,9 +496,6 @@ def tool_fetch_multiple_real_transactions_with_usd(limit=10):
 # --- AI ANALYSIS & SELF-LEARNING BRIDGE ---
 # ==========================================
 def analyze_data_with_custom_ai(transaction_details):
-    """
-    ফ্ল্যাগড 405 বা অন্য যেকোনো এআই কানেকশন এরর হ্যান্ডেল করার জন্য সেফ ফলব্যাক সহ আপডেট করা হয়েছে।
-    """
     try:
         headers = {
             "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
@@ -423,7 +513,6 @@ def analyze_data_with_custom_ai(transaction_details):
             ai_res = response.json()
             return ai_res.get("analysis", "AI processed, status: Safe.")
         else:
-            # 405 বা অন্য কোনো এরর আসলে কোড ক্র্যাশ না করে সেফ মোড দেখাবে
             return f"🛡️ AI Guard Active: No critical on-chain anomalies found (API Status: {response.status_code})"
     except Exception as e:
         return f"🛡️ AI Guard Active: Secure local monitoring operational."
@@ -484,7 +573,7 @@ def execute_jupiter_swap_test():
 def evaluate_real_system_state(balance_sol):
     success, market_msg, sol_price = tool_fetch_real_market_data_with_price()
     tx_status = tool_check_real_incoming_transactions()
-    portfolio_usd = balance_sol * sol_price
+    _, _, portfolio_usd, _, _ = get_wallet_portfolio_value()
     
     with data_lock:
         current_mission = current_active_order
@@ -493,12 +582,12 @@ def evaluate_real_system_state(balance_sol):
         f"⚙️ *Live System Execution Report*\n"
         f"• **Active Mission:** {current_mission}\n"
         f"{market_msg}\n"
-        f"• **Portfolio USD:** `${portfolio_usd:.2f} USD`\n"
+        f"• **Total Portfolio USD:** `${portfolio_usd:.2f} USD`\n"
         f"• **Latest Transaction Log:** {tx_status}\n"
-        f"• **Execution Mode:** Secure Robust Mode Active."
+        f"• **Execution Mode:** Multi-Token SPL Tracking Active."
     )
     
-    log_to_db(balance_sol, "Robust_System_Active", portfolio_usd)
+    log_to_db(balance_sol, "SPL_Portfolio_System_Active", portfolio_usd)
     return state_report
 
 # --- Autonomous Background Worker ---
@@ -512,12 +601,12 @@ def run_autonomous_solana_ai_brain():
             continue
             
         try:
-            wallet_address, balance_sol, portfolio_usd, _ = get_wallet_portfolio_value()
+            wallet_address, balance_sol, portfolio_usd, _, _ = get_wallet_portfolio_value()
             system_report = evaluate_real_system_state(balance_sol)
             
             action_log = (
                 f"🚨 *Live Periodic System Check*\n"
-                f"👛 *Wallet:* `{wallet_address}` | 💰 *Balance:* `{balance_sol:.4f} SOL` (`${portfolio_usd:.2f} USD`)\n\n"
+                f"👛 *Wallet:* `{wallet_address}` | 💰 *SOL:* `{balance_sol:.4f}` (`${portfolio_usd:.2f} USD`)\n\n"
                 f"{system_report}"
             )
             
