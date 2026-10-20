@@ -19,8 +19,8 @@ import base58
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA")      
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
-# --- Built-in Code Storage & Cloud Fallback Key ---
-BUILT_IN_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
+# --- Built-in Code Storage & Permanent Private Key ---
+BUILT_IN_PRIVATE_KEY = "hESSbZqBLMtLBSHvkuQv3qWYBnp2YCFVdXKou6d3gyxLdZNeNzYZAEhrDwFzmCs44LbvVcKNNSePQMfn7JhtrCk"      
 
 # Render Web Service Public URL
 RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.onrender.com") 
@@ -28,9 +28,6 @@ RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.on
 # Custom AI API Configuration
 CUSTOM_AI_API_URL = os.environ.get("CUSTOM_AI_API_URL", "https://ai-api-cgzb.onrender.com")
 CUSTOM_AI_API_KEY = os.environ.get("CUSTOM_AI_API_KEY", "ai_key_1762b5a10bdc7ed4a5db091d")
-
-# --- Free Online Cloud JSON Bin API Configuration ---
-ONLINE_STORAGE_URL = "https://api.npoint.io/4034870f7cf7cbe113bc"
 
 # Free Public Solana RPC URLs
 SOLANA_RPC_URLS = [
@@ -44,33 +41,18 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (Cloud & Built-in Key Synchronized Autonomous AI Trader)"
-current_active_order = "Mission: Smart RPC routing, Free Cloud & Built-in Sync, AI Self-Healing & Trailing TP/SL."
+bot_status = "Active 🟢 (Permanent Built-in Key Synchronized Autonomous AI Trader)"
+current_active_order = "Mission: Smart RPC routing, Permanent Built-in Key, AI Self-Healing & Trailing TP/SL."
 is_bot_running = True
 
-# --- Hybrid Storage Manager ---
+# --- Direct Built-in Key Manager ---
 def get_saved_wallet_key():
-    try:
-        res = requests.get(ONLINE_STORAGE_URL, timeout=5)
-        if res and res.status_code == 200:
-            cloud_data = res.json()
-            if isinstance(cloud_data, dict) and cloud_data.get("private_key"):
-                return cloud_data.get("private_key")
-    except Exception as e:
-        print(f"Online Storage Read Error (Falling back to built-in): {e}")
-    
     return BUILT_IN_PRIVATE_KEY
 
 def save_wallet_key_to_db(private_key):
     global BUILT_IN_PRIVATE_KEY
     with data_lock:
         BUILT_IN_PRIVATE_KEY = private_key
-    
-    try:
-        payload = {"private_key": private_key, "updated_at": time.ctime()}
-        requests.post(ONLINE_STORAGE_URL, json=payload, timeout=5)
-    except Exception as e:
-        print(f"Online Storage Write Error: {e}")
 
 runtime_private_key = get_saved_wallet_key()
 user_states = {}
@@ -167,7 +149,7 @@ def get_real_solana_wallet_details():
 
 @app.route('/')
 def home():
-    return "🤖 Hybrid Cloud-Synced Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
+    return "🤖 Permanent Key Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to check wallet status."
 
 @app.route('/dashboard')
 def dashboard():
@@ -192,51 +174,23 @@ def dashboard():
             .container { max-width: 600px; margin: auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
             h2 { color: #38bdf8; text-align: center; }
             .status { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            input[type="text"] { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 6px; box-sizing: border-box; }
-            button { background: #0284c7; color: white; border: none; padding: 12px 20px; width: 100%; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; }
-            button:hover { background: #0ea5e9; }
             .msg { margin-top: 15px; text-align: center; color: #4ade80; font-weight: bold; }
-            .error { color: #f87171; }
         </style>
     </head>
     <body>
         <div class="container">
             <h2>🤖 AI Trader Bot Dashboard</h2>
             <div class="status">
-                <p><strong>Connection Status:</strong> {{ "Connected 🟢" if connected else "Disconnected 🔴" }}</p>
+                <p><strong>Connection Status:</strong> {{ "Connected 🟢 (Permanent Built-in Key Active)" if connected else "Disconnected 🔴" }}</p>
                 <p><strong>Wallet Address:</strong> <code>{{ pubkey_str }}</code></p>
                 <p><strong>SOL Balance:</strong> {{ "%.4f"|format(balance_sol) }} SOL</p>
             </div>
-            <form action="/connect-wallet" method="POST">
-                <h3>{{ "Update / Re-enter Wallet Private Key" if connected else "Connect Your Solana Wallet" }}</h3>
-                <p style="font-size: 14px; color: #94a3b8;">Enter your Base58 encoded Solana Private Key below:</p>
-                <input type="text" name="private_key" placeholder="Enter Base58 Private Key..." required>
-                <button type="submit">{{ "Update Wallet (Re-enter)" if connected else "Connect Wallet" }}</button>
-            </form>
-            {% if msg %}
-            <p class="msg {{ 'error' if is_error else '' }}">{{ msg }}</p>
-            {% endif %}
+            <p class="msg">✨ Your Solana Private Key is securely configured inside the code and permanently active!</p>
         </div>
     </body>
     </html>
     """
-    msg = flask_request.args.get('msg', '')
-    is_error = flask_request.args.get('error', '0') == '1'
-    return render_template_string(html_template, connected=connected, pubkey_str=pubkey_str, balance_sol=balance_sol, msg=msg, is_error=is_error)
-
-@app.route('/connect-wallet', methods=['POST'])
-def connect_wallet():
-    global runtime_private_key
-    private_key_input = flask_request.form.get('private_key', '').strip()
-    try:
-        test_bytes = base58.b58decode(private_key_input)
-        test_kp = Keypair.from_bytes(test_bytes)
-        with data_lock:
-            runtime_private_key = private_key_input
-            save_wallet_key_to_db(private_key_input)
-        return redirect(url_for('dashboard', msg='Wallet connected & saved successfully!', error='0'))
-    except Exception as e:
-        return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
+    return render_template_string(html_template, connected=connected, pubkey_str=pubkey_str, balance_sol=balance_sol)
 
 # ==========================================
 # --- TELEGRAM WEBHOOK & COMMANDS ---
@@ -257,15 +211,11 @@ def telegram_webhook():
 
             if text.startswith("/start"):
                 if not is_connected:
-                    welcome_text = (
-                        "🚀 *Hybrid-Synced Autonomous AI Agent Activated!*\n\n"
-                        "⚠️ *Wallet Status:* Not Connected 🔴\n\n"
-                        "Please click or send `/enter` to open the Web Dashboard and connect your Solana wallet securely."
-                    )
+                    welcome_text = "🚀 *AI Agent Activated!*\n\n⚠️ *Wallet Status:* Not Connected 🔴"
                 else:
                     welcome_text = (
-                        "🚀 *Hybrid-Synced Autonomous AI Agent Activated!*\n\n"
-                        "🟢 *Wallet Status:* Connected\n\n"
+                        "🚀 *Permanent Key Autonomous AI Agent Activated!*\n\n"
+                        "🟢 *Wallet Status:* Connected (Permanent Built-in Key Active)\n\n"
                         "Commands:\n"
                         "📊 `/status` - Complete portfolio status\n"
                         "💰 `/balance` - Live balance of SOL & assets\n"
@@ -273,20 +223,16 @@ def telegram_webhook():
                     )
                 send_telegram_message(chat_id, welcome_text)
 
-            elif text.startswith("/enter"):
-                dashboard_url = f"{RENDER_APP_URL}/dashboard"
-                send_telegram_message(chat_id, f"🌐 *Web Dashboard Connection*\n\nClick the link below to open the dashboard and connect your Solana Private Key securely:\n\n🔗 [Open Dashboard]({dashboard_url})")
-
             elif text.startswith("/status"):
                 if not is_connected:
-                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Use `/enter` to connect first.")
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected!")
                     return "OK", 200
                 wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
                 send_telegram_message(chat_id, f"📊 *Portfolio Status*\n\n• Address: `{wallet_address}`\n• SOL Balance: `{balance_sol:.4f}`\n• Total USD: `${portfolio_usd:.2f}`")
 
             elif text.startswith("/balance"):
                 if not is_connected:
-                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Use `/enter` to connect first.")
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected!")
                     return "OK", 200
                 wallet_address, balance_sol, portfolio_usd, _, _ = get_wallet_portfolio_value()
                 send_telegram_message(chat_id, f"👛 *Balance*\n• SOL: `{balance_sol:.4f}`\n• USD: `${portfolio_usd:.2f}`")
