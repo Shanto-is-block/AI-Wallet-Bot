@@ -6,7 +6,7 @@ from threading import Lock
 import sqlite3
 import requests
 import base64
-from flask import Flask, request as flask_request
+from flask import Flask, request as flask_request, render_template_string, redirect, url_for
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import transfer, TransferParams
@@ -19,10 +19,10 @@ import base58
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA")      
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
-# Default Solana Wallet Private Key from Environment
+# Default Solana Wallet Private Key from Environment (Optional initial)
 DEFAULT_SOLANA_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
 
-# Runtime Dynamic Wallet Key Storage (For /reenter feature)
+# Runtime Dynamic Wallet Key Storage
 runtime_private_key = DEFAULT_SOLANA_PRIVATE_KEY
 user_states = {} # chat_id -> state string
 
@@ -166,10 +166,115 @@ def get_fastest_rpc():
             continue
     return fastest_rpc
 
+# ==========================================
+# --- WEB DASHBOARD ROUTES ---
+# ==========================================
+def get_solana_keypair():
+    global runtime_private_key
+    try:
+        if not runtime_private_key:
+            return None
+        secret_key_bytes = base58.b58decode(runtime_private_key)
+        return Keypair.from_bytes(secret_key_bytes)
+    except Exception as e:
+        print(f"Keypair Error: {e}")
+        return None
+
+def get_real_solana_wallet_details():
+    wallet_address = "Not Connected"
+    balance_sol = 0.0
+    try:
+        keypair = get_solana_keypair()
+        if not keypair:
+            return wallet_address, balance_sol
+        wallet_address = str(keypair.pubkey())
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [wallet_address]}
+        rpc_url = get_fastest_rpc()
+        res = requests.post(rpc_url, json=payload, timeout=6).json()
+        if "result" in res and "value" in res["result"]:
+            balance_sol = float(res["result"]["value"]) / 1000000000.0
+    except Exception as e:
+        print(f"Balance Check Error: {e}")
+    return wallet_address, balance_sol
+
 @app.route('/')
 def home():
-    return "🤖 Ultra-Optimized Autonomous AI Trader is Active!"
+    return "🤖 Ultra-Optimized Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
 
+@app.route('/dashboard')
+def dashboard():
+    global runtime_private_key
+    connected = bool(runtime_private_key)
+    pubkey_str = "Not Connected"
+    balance_sol = 0.0
+    if connected:
+        kp = get_solana_keypair()
+        if kp:
+            pubkey_str = str(kp.pubkey())
+            _, balance_sol = get_real_solana_wallet_details()
+
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>AI Trader Bot - Dashboard</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; }
+            .container { max-width: 600px; margin: auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+            h2 { color: #38bdf8; text-align: center; }
+            .status { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            input[type="text"] { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 6px; box-sizing: border-box; }
+            button { background: #0284c7; color: white; border: none; padding: 12px 20px; width: 100%; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; }
+            button:hover { background: #0ea5e9; }
+            .msg { margin-top: 15px; text-align: center; color: #4ade80; font-weight: bold; }
+            .error { color: #f87171; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>🤖 AI Trader Bot Dashboard</h2>
+            <div class="status">
+                <p><strong>Connection Status:</strong> {{ "Connected 🟢" if connected else "Disconnected 🔴" }}</p>
+                <p><strong>Wallet Address:</strong> <code>{{ pubkey_str }}</code></p>
+                <p><strong>SOL Balance:</strong> {{ "%.4f"|format(balance_sol) }} SOL</p>
+            </div>
+            <form action="/connect-wallet" method="POST">
+                <h3>{{ "Update / Re-enter Wallet Private Key" if connected else "Connect Your Solana Wallet" }}</h3>
+                <p style="font-size: 14px; color: #94a3b8;">Enter your Base58 encoded Solana Private Key below:</p>
+                <input type="text" name="private_key" placeholder="Enter Base58 Private Key..." required>
+                <button type="submit">{{ "Update Wallet (Re-enter)" if connected else "Connect Wallet" }}</button>
+            </form>
+            {% if msg %}
+            <p class="msg {{ 'error' if is_error else '' }}">{{ msg }}</p>
+            {% endif %}
+        </div>
+    </body>
+    </html>
+    """
+    msg = request.args.get('msg', '')
+    is_error = request.args.get('error', '0') == '1'
+    return render_template_string(html_template, connected=connected, pubkey_str=pubkey_str, balance_sol=balance_sol, msg=msg, is_error=is_error)
+
+@app.route('/connect-wallet', methods=['POST'])
+def connect_wallet():
+    global runtime_private_key
+    private_key_input = request.form.get('private_key', '').strip()
+    try:
+        test_bytes = base58.b58decode(private_key_input)
+        test_kp = Keypair.from_bytes(test_bytes)
+        with data_lock:
+            runtime_private_key = private_key_input
+        return redirect(url_for('dashboard', msg='Wallet connected successfully! Bot is now active.', error='0'))
+    except Exception as e:
+        return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
+
+# ==========================================
+# --- TELEGRAM WEBHOOK & COMMANDS ---
+# ==========================================
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
     global current_active_order, bot_status, runtime_private_key, user_states
@@ -181,54 +286,48 @@ def telegram_webhook():
             raw_text = message.get("text", "").strip()
             text = raw_text.lower()
 
-            # --- 🔄 State Management: Check if waiting for new Private Key ---
-            if user_states.get(chat_id) == "WAITING_FOR_PRIVATE_KEY":
-                if text.startswith("/cancel"):
-                    user_states[chat_id] = None
-                    send_telegram_message(chat_id, "❌ Wallet update cancelled. Previous wallet remains connected.")
-                    return "OK", 200
-                
-                new_key = raw_text
-                try:
-                    test_bytes = base58.b58decode(new_key)
-                    test_kp = Keypair.from_bytes(test_bytes)
-                    new_pubkey = str(test_kp.pubkey())
-                    
-                    with data_lock:
-                        runtime_private_key = new_key
-                        user_states[chat_id] = None
-                    
-                    wallet_address, balance_sol = get_real_solana_wallet_details()
-                    send_telegram_message(chat_id, f"✅ *Previous wallet disconnected successfully!*\n🔌 *New Wallet Connected!*\n\n👛 *Address:* `{wallet_address}`\n💰 *SOL Balance:* `{balance_sol:.4f} SOL`")
-                except Exception as e:
-                    send_telegram_message(chat_id, f"❌ *Invalid Private Key!* Please check and send again correctly, or type `/cancel` to abort.\nError: `{str(e)[:35]}`")
-                return "OK", 200
+            is_connected = bool(runtime_private_key)
 
-            # --- Standard Commands ---
             if text.startswith("/start"):
-                welcome_text = (
-                    "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
-                    "🔍 *Mode:* Smart RPC Router, Auto-Blacklisting, RugCheck & Trailing TP/SL.\n\n"
-                    "Commands:\n"
-                    "📊 `/status` - Complete portfolio valuation & system state\n"
-                    "💰 `/balance` - Live balance of SOL & all SPL assets\n"
-                    "📜 `/trans` - View first 10 transactions with USD value\n"
-                    "📈 `/scan` - Jupiter price API & token scan\n"
-                    "⚡ `/swap` - Execute manual test swap (0.01 SOL to USDC)\n"
-                    "🔄 `/reenter` - Disconnect current wallet & connect a new Private Key\n"
-                    "🛑 `/stop` - Pause autonomous operations\n"
-                    "✍️ `Order: [your command]` - Update operational focus"
-                )
+                if not is_connected:
+                    welcome_text = (
+                        "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
+                        "⚠️ *Wallet Status:* Not Connected 🔴\n\n"
+                        "Please click or send `/enter` to open the Web Dashboard and connect your Solana wallet securely."
+                    )
+                else:
+                    welcome_text = (
+                        "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
+                        "🟢 *Wallet Status:* Connected\n"
+                        "🔍 *Mode:* Smart RPC Router, Auto-Blacklisting, RugCheck & Trailing TP/SL.\n\n"
+                        "Commands:\n"
+                        "📊 `/status` - Complete portfolio valuation & system state\n"
+                        "💰 `/balance` - Live balance of SOL & all SPL assets\n"
+                        "📜 `/trans` - View first 10 transactions with USD value\n"
+                        "📈 `/scan` - Jupiter price API & token scan\n"
+                        "⚡ `/swap` - Execute manual test swap (0.01 SOL to USDC)\n"
+                        "🔄 `/reenter` - Disconnect current wallet & connect a new Private Key via Dashboard\n"
+                        "🛑 `/stop` - Pause autonomous operations\n"
+                        "✍️ `Order: [your command]` - Update operational focus"
+                    )
                 send_telegram_message(chat_id, welcome_text)
 
-            elif text.startswith("/reenter"):
-                user_states[chat_id] = "WAITING_FOR_PRIVATE_KEY"
-                send_telegram_message(chat_id, "🔄 *Wallet Re-entry Mode Activated*\n\nPlease reply with your **new Solana Private Key (Base58)**.\n*(Your previous wallet will be disconnected immediately upon verification.)*\n\nType `/cancel` if you want to abort.")
+            elif text.startswith("/enter"):
+                if is_connected:
+                    send_telegram_message(chat_id, "ℹ️ Wallet is already connected! Use `/reenter` if you want to change your wallet.")
+                else:
+                    dashboard_url = f"{RENDER_APP_URL}/dashboard"
+                    send_telegram_message(chat_id, f"🌐 *Web Dashboard Connection*\n\nClick the link below to open the dashboard and connect your Solana Private Key securely:\n\n🔗 [Open Dashboard]({dashboard_url})")
 
-            elif text.startswith("/cancel"):
-                send_telegram_message(chat_id, "ℹ️ No active operation to cancel.")
+            elif text.startswith("/reenter"):
+                dashboard_url = f"{RENDER_APP_URL}/dashboard"
+                send_telegram_message(chat_id, f"🔄 *Wallet Re-entry Mode*\n\nYour previous wallet will be replaced when you connect a new one on the dashboard.\n\n🔗 [Open Dashboard to Re-enter]({dashboard_url})")
 
             elif text.startswith("/status"):
+                if not is_connected:
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Please use `/enter` to connect your wallet first.")
+                    return "OK", 200
+
                 wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
                 system_state_msg = evaluate_real_system_state(balance_sol)
                 
@@ -250,6 +349,10 @@ def telegram_webhook():
                 send_telegram_message(chat_id, status_msg)
 
             elif text.startswith("/balance"):
+                if not is_connected:
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Please use `/enter` to connect your wallet first.")
+                    return "OK", 200
+
                 wallet_address, balance_sol, portfolio_usd, sol_price, token_details = get_wallet_portfolio_value()
                 incoming_status = tool_check_real_incoming_transactions()
                 
@@ -270,6 +373,10 @@ def telegram_webhook():
                 send_telegram_message(chat_id, bal_msg)
 
             elif text.startswith("/trans"):
+                if not is_connected:
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Please use `/enter` to connect your wallet first.")
+                    return "OK", 200
+
                 trans_result = tool_fetch_multiple_real_transactions_with_usd(10)
                 send_telegram_message(chat_id, f"📜 *Latest 10 Transactions (USD Value)*\n\n{trans_result}")
 
@@ -285,6 +392,10 @@ def telegram_webhook():
                 send_telegram_message(chat_id, f"🔍 *Jupiter Price & Asset Scan*\n\n{scan_result}")
 
             elif text.startswith("/swap"):
+                if not is_connected:
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Please use `/enter` to connect your wallet first.")
+                    return "OK", 200
+
                 swap_result = execute_real_jupiter_swap("So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 10000000)
                 send_telegram_message(chat_id, f"⚡ *Jupiter Real Swap Execution*\n\n{swap_result}")
 
@@ -301,9 +412,12 @@ def telegram_webhook():
                 send_telegram_message(chat_id, f"✅ New operational mission set: {custom_order}")
 
             else:
-                wallet_address, balance_sol = get_real_solana_wallet_details()
-                system_state_msg = evaluate_real_system_state(balance_sol)
-                send_telegram_message(chat_id, f"🤖 Agent is running live.\n\n{system_state_msg}")
+                if not is_connected:
+                    send_telegram_message(chat_id, "⚠️ Wallet not connected! Please use `/enter` to open the Web Dashboard and connect your wallet.")
+                else:
+                    wallet_address, balance_sol = get_real_solana_wallet_details()
+                    system_state_msg = evaluate_real_system_state(balance_sol)
+                    send_telegram_message(chat_id, f"🤖 Agent is running live.\n\n{system_state_msg}")
 
     except Exception as e:
         print(f"Webhook Error: {e}")
@@ -331,38 +445,9 @@ def setup_telegram_webhook():
         except Exception:
             pass
 
-def get_solana_keypair():
-    global runtime_private_key
-    try:
-        if not runtime_private_key:
-            print("❌ Error: Solana Private Key is missing!")
-            return None
-        secret_key_bytes = base58.b58decode(runtime_private_key)
-        return Keypair.from_bytes(secret_key_bytes)
-    except Exception as e:
-        print(f"Keypair Error: {e}")
-        return None
-
 # ==========================================
 # --- REAL ON-CHAIN & PORTFOLIO TOOLS ---
 # ==========================================
-
-def get_real_solana_wallet_details():
-    wallet_address = "Not Connected"
-    balance_sol = 0.0
-    try:
-        keypair = get_solana_keypair()
-        if not keypair:
-            return wallet_address, balance_sol
-        wallet_address = str(keypair.pubkey())
-        payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [wallet_address]}
-        rpc_url = get_fastest_rpc()
-        res = requests.post(rpc_url, json=payload, timeout=6).json()
-        if "result" in res and "value" in res["result"]:
-            balance_sol = float(res["result"]["value"]) / 1000000000.0
-    except Exception as e:
-        print(f"Balance Check Error: {e}")
-    return wallet_address, balance_sol
 
 def get_wallet_spl_tokens(wallet_address):
     tokens_data = []
@@ -944,6 +1029,10 @@ def run_autonomous_solana_ai_brain():
             continue
             
         try:
+            if not runtime_private_key:
+                time.sleep(10)
+                continue
+
             wallet_address, balance_sol, portfolio_usd, _, _ = get_wallet_portfolio_value()
             
             track_and_execute_trailing_tpsl()
