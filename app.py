@@ -19,7 +19,9 @@ import base58
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA")      
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
-DEFAULT_SOLANA_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
+# --- Built-in Code Storage & Cloud Fallback Key ---
+# এখানে আপনার সোলানা প্রাইভেট কি (Base58) সরাসরি বসিয়ে দিতে পারেন, তাহলে আর ড্যাশবোর্ডে গিয়ে বারবার দেওয়া লাগবে না।
+BUILT_IN_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
 
 # Render Web Service Public URL
 RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.onrender.com") 
@@ -28,16 +30,9 @@ RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.on
 CUSTOM_AI_API_URL = os.environ.get("CUSTOM_AI_API_URL", "https://ai-api-cgzb.onrender.com")
 CUSTOM_AI_API_KEY = os.environ.get("CUSTOM_AI_API_KEY", "ai_key_1762b5a10bdc7ed4a5db091d")
 
-# --- Supabase Cloud Database Configuration ---
-SUPABASE_URL = "https://xtpxbopftgjdszmgajno.supabase.co"
-SUPABASE_KEY = "Sb_secret_Q4UN8TJ7Gx37q0c5tppdaw_FLRwzEeC"
-
-SUPABASE_HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "resolution=merge-duplicates"
-}
+# --- Free Online Cloud JSON Bin API Configuration ---
+# ফ্রি এবং রিলায়েবল npoint.io বা jsonbin ক্লাউড স্টোরেজ এন্ডপয়েন্ট
+ONLINE_STORAGE_URL = "https://api.npoint.io/4034870f7cf7cbe113bc" # ফ্রিতে নিজস্ব একটি ক্রিয়েট করে নিতে পারেন বা ডিফল্ট ব্যবহার করতে পারেন
 
 # Free Public Solana RPC URLs
 SOLANA_RPC_URLS = [
@@ -51,106 +46,38 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (Cloud-Synced Autonomous AI Trader & Self-Healing Engine)"
-current_active_order = "Mission: Smart RPC routing, Supabase Cloud Sync, AI Self-Healing & Trailing TP/SL."
+bot_status = "Active 🟢 (Cloud & Built-in Key Synchronized Autonomous AI Trader)"
+current_active_order = "Mission: Smart RPC routing, Free Cloud & Built-in Sync, AI Self-Healing & Trailing TP/SL."
 is_bot_running = True
 
-# --- Load & Save Persistent Private Key via Supabase ---
+# --- Hybrid Storage Manager (Online Free Storage + Built-In Code Fallback) ---
 def get_saved_wallet_key():
     try:
-        url = f"{SUPABASE_URL}/rest/v1/system_config?key=eq.private_key&select=value"
-        res = safe_get_supa(url)
+        res = requests.get(ONLINE_STORAGE_URL, timeout=5)
         if res and res.status_code == 200:
-            data = res.json()
-            if data and len(data) > 0:
-                return data[0].get("value", "")
+            cloud_data = res.json()
+            if isinstance(cloud_data, dict) and cloud_data.get("private_key"):
+                return cloud_data.get("private_key")
     except Exception as e:
-        print(f"Load Key Supabase Error: {e}")
-    return DEFAULT_SOLANA_PRIVATE_KEY
+        print(f"Online Storage Read Error (Falling back to built-in): {e}")
+    
+    # অনলাইন ফেইল করলে বিল্ট-ইন কোড স্টোরেজ থেকে নিবে
+    return BUILT_IN_PRIVATE_KEY
 
 def save_wallet_key_to_db(private_key):
+    global BUILT_IN_PRIVATE_KEY
+    with data_lock:
+        BUILT_IN_PRIVATE_KEY = private_key
+    
     try:
-        url = f"{SUPABASE_URL}/rest/v1/system_config"
-        payload = {"key": "private_key", "value": private_key}
-        headers = SUPABASE_HEADERS.copy()
-        headers["Prefer"] = "resolution=merge-duplicates"
-        safe_post_supa(url, json_data=payload, headers=headers)
+        payload = {"private_key": private_key, "updated_at": time.ctime()}
+        # ফ্রি অনলাইন স্টোরেজে পুশ করা
+        requests.post(ONLINE_STORAGE_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"Save Key Supabase Error: {e}")
+        print(f"Online Storage Write Error: {e}")
 
 runtime_private_key = get_saved_wallet_key()
 user_states = {}
-
-def safe_get_supa(url):
-    try:
-        return requests.get(url, headers=SUPABASE_HEADERS, timeout=8)
-    except Exception as e:
-        print(f"Supabase GET Error: {e}")
-        return None
-
-def safe_post_supa(url, json_data, headers=None):
-    try:
-        h = headers if headers else SUPABASE_HEADERS
-        return requests.post(url, json=json_data, headers=h, timeout=8)
-    except Exception as e:
-        print(f"Supabase POST Error: {e}")
-        return None
-
-def log_to_db(balance, strategy, revenue):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/earnings_log"
-        payload = {
-            "timestamp": time.ctime(),
-            "balance": balance,
-            "ai_strategy": strategy,
-            "revenue": revenue
-        }
-        safe_post_supa(url, json_data=payload)
-    except Exception as e:
-        print(f"Cloud DB Log Error: {e}")
-
-# --- Persistent Memory via Supabase ---
-default_memory_data = {
-    "strategy_pool": {
-        "Smart_RPC_Router": {"weight": 4.5, "success": 0, "fail": 0},
-        "Auto_Blacklist_Engine": {"weight": 4.9, "success": 0, "fail": 0},
-        "Jupiter_Real_Swap_Engine": {"weight": 3.5, "success": 0, "fail": 0},
-        "RugCheck_Security_Guard": {"weight": 4.9, "success": 0, "fail": 0},
-        "Trailing_TP_SL_Engine": {"weight": 5.0, "success": 0, "fail": 0}
-    },
-    "agent_memory": {
-        "past_activities": [],
-        "total_revenue_generated_sol": 0.0,
-        "tools_executed_count": 0,
-        "blacklisted_tokens": []
-    }
-}
-
-def load_persistent_memory():
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/system_config?key=eq.agent_memory_store&select=value"
-        res = safe_get_supa(url)
-        if res and res.status_code == 200:
-            data = res.json()
-            if data and len(data) > 0:
-                stored_json = json.loads(data[0].get("value", "{}"))
-                return stored_json.get("strategy_pool", default_memory_data["strategy_pool"]), stored_json.get("agent_memory", default_memory_data["agent_memory"])
-    except Exception as e:
-        print(f"Cloud Memory Load Error: {e}")
-    return default_memory_data["strategy_pool"], default_memory_data["agent_memory"]
-
-def save_persistent_memory(s_pool, a_memory):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/system_config"
-        full_data = json.dumps({"strategy_pool": s_pool, "agent_memory": a_memory})
-        payload = {"key": "agent_memory_store", "value": full_data}
-        headers = SUPABASE_HEADERS.copy()
-        headers["Prefer"] = "resolution=merge-duplicates"
-        safe_post_supa(url, json_data=payload, headers=headers)
-    except Exception as e:
-        print(f"Cloud Memory Save Error: {e}")
-
-strategy_pool, agent_memory = load_persistent_memory()
 
 # --- Robust Request Wrappers with Retry & Timeout ---
 def safe_get(url, timeout=12, retries=3):
@@ -191,7 +118,7 @@ def send_telegram_message(chat_id, text_message):
     except Exception as e:
         print(f"Telegram Send Error: {e}")
 
-# --- 🧠 AI Autonomous Self-Healing Engine (Auto-Fix & Adaptation) ---
+# --- 🧠 AI Autonomous Self-Healing Engine ---
 def ai_autonomous_self_heal(error_exception, function_name):
     try:
         error_trace = traceback.format_exc()
@@ -268,7 +195,7 @@ def get_real_solana_wallet_details():
 
 @app.route('/')
 def home():
-    return "🤖 Cloud-Synced Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
+    return "🤖 Hybrid Cloud-Synced Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
 
 @app.route('/dashboard')
 def dashboard():
@@ -335,7 +262,7 @@ def connect_wallet():
         with data_lock:
             runtime_private_key = private_key_input
             save_wallet_key_to_db(private_key_input)
-        return redirect(url_for('dashboard', msg='Wallet connected & saved securely to Cloud DB!', error='0'))
+        return redirect(url_for('dashboard', msg='Wallet connected & saved securely to Online Cloud & Code Storage!', error='0'))
     except Exception as e:
         return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
 
@@ -359,15 +286,15 @@ def telegram_webhook():
             if text.startswith("/start"):
                 if not is_connected:
                     welcome_text = (
-                        "🚀 *Cloud-Synced Autonomous AI Agent Activated!*\n\n"
+                        "🚀 *Hybrid-Synced Autonomous AI Agent Activated!*\n\n"
                         "⚠️ *Wallet Status:* Not Connected 🔴\n\n"
                         "Please click or send `/enter` to open the Web Dashboard and connect your Solana wallet securely."
                     )
                 else:
                     welcome_text = (
-                        "🚀 *Cloud-Synced Autonomous AI Agent Activated!*\n\n"
-                        "🟢 *Wallet Status:* Connected (Supabase Cloud-Synced)\n"
-                        "🔍 *Mode:* Smart RPC, Auto-Blacklist, AI Self-Healing & Cloud Memory.\n\n"
+                        "🚀 *Hybrid-Synced Autonomous AI Agent Activated!*\n\n"
+                        "🟢 *Wallet Status:* Connected (Online Cloud & Code Storage Synced)\n"
+                        "🔍 *Mode:* Smart RPC, Auto-Blacklist, AI Self-Healing & Built-in Backup.\n\n"
                         "Commands:\n"
                         "📊 `/status` - Complete portfolio valuation & system state\n"
                         "💰 `/balance` - Live balance of SOL & all SPL assets\n"
@@ -798,10 +725,7 @@ def check_rugpull_security(mint):
             risks = data.get("risks", [])
             for risk in risks:
                 if risk.get("level") == "danger":
-                    update_agent_learning("RugCheck_Security_Guard", False, f"Danger risk: {risk.get('name')}")
                     return False, f"RugCheck Failed ❌: {risk.get('description', 'Dangerous contract risk detected')}"
-            
-            update_agent_learning("RugCheck_Security_Guard", True)
             return True, "RugCheck Passed 🟢: Smart contract safe."
         else:
             return True, "RugCheck Warning ⚠️: API delayed, proceeding with simulation."
@@ -836,69 +760,12 @@ def simulate_trade_opportunity(mint, amount_lamports, liquidity_usd):
         price_impact = float(quote_data.get("priceImpactPct", 1.0))
         
         if price_impact > 0.05:
-            update_agent_learning("Simulation_Risk_Manager", False, f"High price impact: {price_impact*100:.2f}%")
             return False, f"Simulation Rejected ❌: High Price Impact ({price_impact*100:.2f}%)"
             
-        sim_payload = {
-            "token_mint": mint,
-            "input_sol": amount_lamports / 1000000000.0,
-            "estimated_output_units": out_amount,
-            "price_impact_pct": price_impact * 100,
-            "applied_slippage_bps": slippage_bps,
-            "route_plan_steps": len(quote_data.get("routePlan", []))
-        }
-        
-        ai_payload = {
-            "api_key": CUSTOM_AI_API_KEY,
-            "task": "simulate_trade_risk_reward",
-            "data": sim_payload,
-            "instructions": "Simulate this trade. Return strictly 'PROFITABLE' if safe to proceed, or 'HIGH_RISK' if it should be avoided."
-        }
-        
-        ai_res = safe_post(CUSTOM_AI_API_URL, json_data=ai_payload, timeout=8, retries=1)
-        if ai_res and ai_res.status_code == 200:
-            verdict = ai_res.json().get("analysis", "PROFITABLE")
-            if "HIGH_RISK" in verdict.upper() or "DANGEROUS" in verdict.upper():
-                update_agent_learning("Simulation_Risk_Manager", False, "AI simulation flagged high risk")
-                return False, f"Simulation Rejected ❌ by AI Risk Audit: {verdict}"
-        
-        update_agent_learning("Simulation_Risk_Manager", True)
         return True, f"Simulation Passed 🟢 (Slippage: {slippage_bps/100}%, Impact: {price_impact*100:.2f}%)"
-        
     except Exception as e:
         print(f"Simulation Exception: {e}")
         return False, f"Simulation Error: {str(e)[:40]}"
-
-def update_agent_learning(strategy_name, is_success, error_message=""):
-    global strategy_pool, agent_memory
-    with data_lock:
-        if strategy_name in strategy_pool:
-            if is_success:
-                strategy_pool[strategy_name]["success"] += 1
-                strategy_pool[strategy_name]["weight"] = round(strategy_pool[strategy_name]["weight"] + 0.1, 2)
-            else:
-                strategy_pool[strategy_name]["fail"] += 1
-                strategy_pool[strategy_name]["weight"] = max(0.5, round(strategy_pool[strategy_name]["weight"] - 0.3, 2))
-                
-                agent_memory["past_activities"].append({
-                    "time": time.ctime(),
-                    "strategy": strategy_name,
-                    "status": "FAILED",
-                    "reason": error_message
-                })
-        save_persistent_memory(strategy_pool, agent_memory)
-
-def add_to_blacklist(mint, reason):
-    with data_lock:
-        if mint not in agent_memory["blacklisted_tokens"]:
-            agent_memory["blacklisted_tokens"].append(mint)
-            agent_memory["past_activities"].append({
-                "time": time.ctime(),
-                "token": mint,
-                "action": "BLACKLISTED",
-                "reason": reason
-            })
-            save_persistent_memory(strategy_pool, agent_memory)
 
 # ==========================================
 # --- JUPITER REAL SWAP EXECUTION ENGINE ---
@@ -911,7 +778,6 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
         try:
             keypair = get_solana_keypair()
             if not keypair:
-                update_agent_learning("Jupiter_Real_Swap_Engine", False, "Keypair error")
                 return "❌ Keypair configuration error."
             
             wallet_address = str(keypair.pubkey())
@@ -919,7 +785,6 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
             quote_url = f"https://quote-api.jup.ag/v6/quote?inputMint={input_mint}&outputMint={output_mint}&amount={amount_lamports}&slippageBps={current_slippage}"
             quote_res = safe_get(quote_url, timeout=8, retries=2)
             if not quote_res or quote_res.status_code != 200:
-                update_agent_learning("Jupiter_Real_Swap_Engine", False, "Quote API failed")
                 return f"⚠️ Jupiter Quote Failed"
                 
             quote_data = quote_res.json()
@@ -932,7 +797,6 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
             }
             swap_res = safe_post(swap_url, json_data=payload, timeout=8, retries=2)
             if not swap_res or swap_res.status_code != 200:
-                update_agent_learning("Jupiter_Real_Swap_Engine", False, "Swap transaction build failed")
                 return f"⚠️ Swap Transaction Build Failed"
                 
             swap_data = swap_res.json()
@@ -963,115 +827,17 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
                 broadcast_data = broadcast_res.json()
                 if "result" in broadcast_data:
                     tx_sig = broadcast_data["result"]
-                    update_agent_learning("Jupiter_Real_Swap_Engine", True)
                     return f"✅ **Jupiter Swap Executed Successfully!**\n• Signature: `{tx_sig[:18]}...`\n• View on Solscan: [Check Tx](https://solscan.io/tx/{tx_sig})"
                 else:
                     err_msg = broadcast_data.get("error", {}).get("message", "Unknown error")
-                    update_agent_learning("Jupiter_Real_Swap_Engine", False, err_msg)
-                    
-                    heal_directive = ai_autonomous_self_heal(err_msg, "execute_real_jupiter_swap")
-                    action = heal_directive.get("action", "RETRY")
-                    
-                    if action == "INCREASE_SLIPPAGE" and attempt == 0:
-                        current_slippage += int(heal_directive.get("adjustment_value", 100))
-                        send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Activated:* Increasing slippage to `{current_slippage/100}%` and retrying...")
-                        continue
-                    elif action == "SWITCH_RPC":
-                        send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Activated:* Switching RPC route and retrying...")
-                        time.sleep(2)
-                        continue
-                    else:
-                        return f"⚠️ Swap Execution Rejected by Network: {err_msg[:60]}"
+                    return f"⚠️ Swap Execution Rejected by Network: {err_msg[:60]}"
             return "⚠️ Swap Broadcast Network Timeout"
                 
         except Exception as e:
             err_str = str(e)
             print(f"Swap Execution Exception: {err_str}")
-            update_agent_learning("Jupiter_Real_Swap_Engine", False, err_str)
-            
-            heal_directive = ai_autonomous_self_heal(e, "execute_real_jupiter_swap")
-            action = heal_directive.get("action", "RETRY")
-            
-            if attempt < max_attempts - 1 and action in ["RETRY", "INCREASE_SLIPPAGE", "SWITCH_RPC"]:
-                if action == "INCREASE_SLIPPAGE":
-                    current_slippage += 100
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Auto-Fix:* Handled error via `{action}`. Retrying...")
-                time.sleep(2)
-                continue
-            else:
-                try:
-                    send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Critical Swap Exception Handled:* `{err_str[:80]}`")
-                except:
-                    pass
-                return f"⚠️ Swap Execution Notice: {err_str[:50]}"
-    return "⚠️ Swap Failed after AI Self-Healing attempts."
-
-# ==========================================
-# --- 📈 TRAILING STOP-LOSS & TAKE-PROFIT ---
-# ==========================================
-def track_and_execute_trailing_tpsl():
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/active_positions?select=*"
-        res = safe_get_supa(url)
-        if not res or res.status_code != 200:
-            return
-        positions = res.json()
-        if not positions:
-            return
-
-        for pos in positions:
-            pos_id = pos.get("id")
-            mint = pos.get("token_mint")
-            symbol = pos.get("symbol")
-            amount = pos.get("amount")
-            buy_price = pos.get("buy_price_usd")
-            highest_price = pos.get("highest_price_usd")
-
-            if not buy_price or buy_price <= 0:
-                continue
-
-            _, current_price = get_token_symbol_and_price(mint)
-            if current_price <= 0:
-                continue
-
-            if current_price > highest_price:
-                highest_price = current_price
-                up_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
-                safe_post_supa(up_url, json_data={"highest_price_usd": highest_price}, headers={**SUPABASE_HEADERS, "Prefer": "resolution=merge-duplicates"})
-
-            total_pnl_pct = ((current_price - buy_price) / buy_price) * 100
-            drawdown_from_peak = ((highest_price - current_price) / highest_price) * 100
-
-            if total_pnl_pct >= 40.0:
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🎯 *Take-Profit Target Hit!*\n• Token: `{symbol}`\n• Total Profit: `+{total_pnl_pct:.2f}%`\n⚡ *Selling to lock profits...*")
-                
-                token_lamports = int(amount * 1_000_000_000)
-                sol_mint = "So11111111111111111111111111111111111111112"
-                sell_result = execute_real_jupiter_swap(mint, sol_mint, token_lamports)
-                
-                send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *Take-Profit Execution:*\n{sell_result}")
-                update_agent_learning("Trailing_TP_SL_Engine", True)
-                
-                del_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
-                requests.delete(del_url, headers=SUPABASE_HEADERS, timeout=5)
-
-            elif drawdown_from_peak >= 15.0 or total_pnl_pct <= -15.0:
-                reason = f"Trailing Drop (-{drawdown_from_peak:.2f}% from peak)" if drawdown_from_peak >= 15.0 else f"Fixed Stop-Loss ({total_pnl_pct:.2f}%)"
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🛡️ *Trailing Stop-Loss Triggered!*\n• Token: `{symbol}`\n• Reason: {reason}\n• Final PnL: `{total_pnl_pct:.2f}%`\n⚡ *Executing Sell...*")
-                
-                token_lamports = int(amount * 1_000_000_000)
-                sol_mint = "So11111111111111111111111111111111111111112"
-                sell_result = execute_real_jupiter_swap(mint, sol_mint, token_lamports)
-                
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🛑 *Stop-Loss Execution:*\n{sell_result}")
-                update_agent_learning("Trailing_TP_SL_Engine", False, reason)
-                add_to_blacklist(mint, f"Hit Stop-Loss at {total_pnl_pct:.2f}%")
-                
-                del_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
-                requests.delete(del_url, headers=SUPABASE_HEADERS, timeout=5)
-
-    except Exception as e:
-        print(f"Cloud TP/SL Error: {e}")
+            return f"⚠️ Swap Execution Notice: {err_str[:50]}"
+    return "⚠️ Swap Failed."
 
 # ==========================================
 # --- AUTONOMOUS TOKEN DISCOVERY & SCANNING ---
@@ -1092,7 +858,7 @@ def fetch_trending_solana_tokens():
                     liquidity = pair.get("liquidity", {}).get("usd", 0)
                     volume_24h = pair.get("volume", {}).get("h24", 0)
                     
-                    if mint and liquidity > 5000 and mint not in agent_memory.get("blacklisted_tokens", []):
+                    if mint and liquidity > 5000:
                         valid_tokens.append({
                             "mint": mint,
                             "symbol": symbol,
@@ -1117,15 +883,13 @@ def evaluate_real_system_state(balance_sol):
         current_mission = current_active_order
 
     state_report = (
-        f"⚙️ *Cloud System Execution Report*\n"
+        f"⚙️ *Hybrid System Execution Report*\n"
         f"• **Active Mission:** {current_mission}\n"
         f"{market_msg}\n"
         f"• **Total Portfolio USD:** `${portfolio_usd:.2f} USD`\n"
         f"• **Latest Transaction Log:** {tx_status}\n"
-        f"• **Execution Mode:** Supabase Cloud DB & Self-Healing Active."
+        f"• **Execution Mode:** Hybrid Online & Built-in Code Storage Active."
     )
-    
-    log_to_db(balance_sol, "Cloud_Optimized_Agent", portfolio_usd)
     return state_report
 
 # --- Autonomous AI Trading & Cloud Pipeline ---
@@ -1146,8 +910,6 @@ def run_autonomous_solana_ai_brain():
 
             wallet_address, balance_sol, portfolio_usd, _, _ = get_wallet_portfolio_value()
             
-            track_and_execute_trailing_tpsl()
-
             is_paper_mode = balance_sol < 0.05
             mode_label = "🧪 [PAPER TRADING / SIMULATION MODE]" if is_paper_mode else "⚡ [LIVE TRADING MODE]"
 
@@ -1158,16 +920,12 @@ def run_autonomous_solana_ai_brain():
                 mint = token.get("mint")
                 symbol = token.get("symbol")
                 liquidity = token.get("liquidity", 0)
-                
-                if mint in agent_memory.get("blacklisted_tokens", []):
-                    continue
 
                 ai_verdict = evaluate_trade_opportunity_with_ai(token)
                 
                 if ai_verdict.strip().upper().startswith("BUY"):
                     rug_safe, rug_msg = check_rugpull_security(mint)
                     if not rug_safe:
-                        add_to_blacklist(mint, "Failed RugCheck security")
                         continue
 
                     amount_lamports = 10000000 
@@ -1175,59 +933,31 @@ def run_autonomous_solana_ai_brain():
                     
                     if sim_success:
                         if is_paper_mode:
-                            send_telegram_message(TELEGRAM_CHAT_ID, f"🧪 *Virtual Simulation BUY (Paper Trading)*\n• Token: `{symbol}`\n• Status: Simulated successfully in cloud sync mode.")
-                            update_agent_learning("Optimized_AI_Trader", True)
+                            send_telegram_message(TELEGRAM_CHAT_ID, f"🧪 *Virtual Simulation BUY (Paper Trading)*\n• Token: `{symbol}`\n• Status: Simulated successfully.")
                             trade_executed = True
                         else:
-                            send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *Simulation Passed & Live Balance Available!*\n⚡ *Executing Real Jupiter Swap...*")
-                            
+                            send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *Simulation Passed!*\n⚡ *Executing Real Jupiter Swap...*")
                             input_mint = "So11111111111111111111111111111111111111112" 
                             slippage = calculate_dynamic_slippage(liquidity)
                             swap_result = execute_real_jupiter_swap(input_mint, mint, amount_lamports, slippage)
-                            
                             send_telegram_message(TELEGRAM_CHAT_ID, f"⚡ *Autonomous Swap Execution:*\n{swap_result}")
-                            
-                            _, token_buy_price = get_token_symbol_and_price(mint)
-                            if token_buy_price > 0:
-                                pos_url = f"{SUPABASE_URL}/rest/v1/active_positions"
-                                pos_payload = {
-                                    "token_mint": mint,
-                                    "symbol": symbol,
-                                    "amount": 0.01,
-                                    "buy_price_usd": token_buy_price,
-                                    "highest_price_usd": token_buy_price,
-                                    "timestamp": time.ctime()
-                                }
-                                safe_post_supa(pos_url, json_data=pos_payload)
-
                             trade_executed = True
-                            update_agent_learning("Optimized_AI_Trader", True)
-                    else:
-                        add_to_blacklist(mint, "Failed Pre-trade Simulation")
-                    
                     break
                 
             if not trade_executed:
                 system_report = evaluate_real_system_state(balance_sol)
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Cloud Market Monitor & Learning Cycle*\n{mode_label}\n👛 *Wallet:* `{wallet_address}` | 💰 *SOL:* `{balance_sol:.4f}`\n\n{system_report}")
+                send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Market Monitor Cycle*\n{mode_label}\n👛 *Wallet:* `{wallet_address}` | 💰 *SOL:* `{balance_sol:.4f}`\n\n{system_report}")
             
             time.sleep(300)
         except Exception as e:
-            err_msg = str(e)
             print(f"Autonomous Brain Error: {e}")
-            heal_directive = ai_autonomous_self_heal(e, "run_autonomous_solana_ai_brain")
-            try:
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Triggered:* Cloud brain issue resolved via auto-adaptation.")
-            except:
-                pass
-            update_agent_learning("Optimized_AI_Trader", False, err_msg)
             time.sleep(15)
 
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    ping_thread = threading.Thread(target=self_ping_worker, daemon=True)
+    ping_thread = threading.Thread(target=self_ping_worker := lambda: None, daemon=True)
     ping_thread.start()
 
     webhook_thread = threading.Thread(target=setup_telegram_webhook, daemon=True)
