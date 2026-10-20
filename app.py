@@ -216,9 +216,6 @@ def dashboard():
     html_template = """
     <!DOCTYPE html>
     <html lang="en">
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <title>AI Trader Bot - Dashboard</title>
@@ -255,14 +252,14 @@ def dashboard():
     </body>
     </html>
     """
-    msg = request.args.get('msg', '')
-    is_error = request.args.get('error', '0') == '1'
+    msg = flask_request.args.get('msg', '')
+    is_error = flask_request.args.get('error', '0') == '1'
     return render_template_string(html_template, connected=connected, pubkey_str=pubkey_str, balance_sol=balance_sol, msg=msg, is_error=is_error)
 
 @app.route('/connect-wallet', methods=['POST'])
 def connect_wallet():
     global runtime_private_key
-    private_key_input = request.form.get('private_key', '').strip()
+    private_key_input = flask_request.form.get('private_key', '').strip()
     try:
         test_bytes = base58.b58decode(private_key_input)
         test_kp = Keypair.from_bytes(test_bytes)
