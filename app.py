@@ -19,12 +19,7 @@ import base58
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__FVJlwB6LGbkYRFPXVMm7fYBaaA")      
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
-# Default Solana Wallet Private Key from Environment (Optional initial)
 DEFAULT_SOLANA_PRIVATE_KEY = os.environ.get("SOLANA_PRIVATE_KEY_BASE58", "")      
-
-# Runtime Dynamic Wallet Key Storage
-runtime_private_key = DEFAULT_SOLANA_PRIVATE_KEY
-user_states = {} # chat_id -> state string
 
 # Render Web Service Public URL
 RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.onrender.com") 
@@ -49,7 +44,7 @@ bot_status = "Active 🟢 (Ultra-Optimized Autonomous AI Trader)"
 current_active_order = "Mission: Smart RPC routing, Auto-Blacklisting, AI simulation & Trailing TP/SL."
 is_bot_running = True
 
-# --- SQLite Database Setup for Secure Logging & Active Positions ---
+# --- SQLite Database Setup for Secure Logging & Persistent Wallet Key ---
 DB_FILE = "agent_database.db"
 
 def init_db():
@@ -76,12 +71,46 @@ def init_db():
                 timestamp TEXT
             )
         ''')
+        # Permanent System Config table to store Wallet Key securely across server restarts
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"DB Init Error: {e}")
 
 init_db()
+
+# --- Load & Save Persistent Private Key from SQLite ---
+def get_saved_wallet_key():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM system_config WHERE key = 'private_key'")
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception as e:
+        print(f"Load Key DB Error: {e}")
+    return DEFAULT_SOLANA_PRIVATE_KEY
+
+def save_wallet_key_to_db(private_key):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO system_config (key, value) VALUES ('private_key', ?)", (private_key,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Save Key DB Error: {e}")
+
+runtime_private_key = get_saved_wallet_key()
+user_states = {}
 
 def log_to_db(balance, strategy, revenue):
     try:
@@ -172,9 +201,10 @@ def get_fastest_rpc():
 def get_solana_keypair():
     global runtime_private_key
     try:
-        if not runtime_private_key:
+        current_key = get_saved_wallet_key()
+        if not current_key:
             return None
-        secret_key_bytes = base58.b58decode(runtime_private_key)
+        secret_key_bytes = base58.b58decode(current_key)
         return Keypair.from_bytes(secret_key_bytes)
     except Exception as e:
         print(f"Keypair Error: {e}")
@@ -203,8 +233,8 @@ def home():
 
 @app.route('/dashboard')
 def dashboard():
-    global runtime_private_key
-    connected = bool(runtime_private_key)
+    current_key = get_saved_wallet_key()
+    connected = bool(current_key)
     pubkey_str = "Not Connected"
     balance_sol = 0.0
     if connected:
@@ -265,7 +295,8 @@ def connect_wallet():
         test_kp = Keypair.from_bytes(test_bytes)
         with data_lock:
             runtime_private_key = private_key_input
-        return redirect(url_for('dashboard', msg='Wallet connected successfully! Bot is now active.', error='0'))
+            save_wallet_key_to_db(private_key_input) # Permanent DB save
+        return redirect(url_for('dashboard', msg='Wallet connected & saved securely! Bot is active.', error='0'))
     except Exception as e:
         return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
 
@@ -274,7 +305,7 @@ def connect_wallet():
 # ==========================================
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
-    global current_active_order, bot_status, runtime_private_key, user_states
+    global current_active_order, bot_status, runtime_private_key
     try:
         data = flask_request.get_json()
         if "message" in data:
@@ -283,7 +314,8 @@ def telegram_webhook():
             raw_text = message.get("text", "").strip()
             text = raw_text.lower()
 
-            is_connected = bool(runtime_private_key)
+            current_key = get_saved_wallet_key()
+            is_connected = bool(current_key)
 
             if text.startswith("/start"):
                 if not is_connected:
@@ -295,7 +327,7 @@ def telegram_webhook():
                 else:
                     welcome_text = (
                         "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
-                        "🟢 *Wallet Status:* Connected\n"
+                        "🟢 *Wallet Status:* Connected (Persistent)\n"
                         "🔍 *Mode:* Smart RPC Router, Auto-Blacklisting, RugCheck & Trailing TP/SL.\n\n"
                         "Commands:\n"
                         "📊 `/status` - Complete portfolio valuation & system state\n"
@@ -1026,7 +1058,8 @@ def run_autonomous_solana_ai_brain():
             continue
             
         try:
-            if not runtime_private_key:
+            current_key = get_saved_wallet_key()
+            if not current_key:
                 time.sleep(10)
                 continue
 
