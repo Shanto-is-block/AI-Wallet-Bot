@@ -30,7 +30,7 @@ CUSTOM_AI_API_KEY = os.environ.get("CUSTOM_AI_API_KEY", "ai_key_1762b5a10bdc7ed4
 
 # --- Supabase Cloud Database Configuration ---
 SUPABASE_URL = "https://xtpxbopftgjdszmgajno.supabase.co"
-SUPABASE_KEY = "sb_secret_BBNbSpqcyVBxnnE8r-vMGQ_YWhRtp89"
+SUPABASE_KEY = "Sb_secret_Q4UN8TJ7Gx37q0c5tppdaw_FLRwzEeC"
 
 SUPABASE_HEADERS = {
     "apikey": SUPABASE_KEY,
