@@ -3,7 +3,6 @@ import json
 import time
 import threading
 from threading import Lock
-import sqlite3
 import requests
 import base64
 import traceback
@@ -29,6 +28,17 @@ RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.on
 CUSTOM_AI_API_URL = os.environ.get("CUSTOM_AI_API_URL", "https://ai-api-cgzb.onrender.com")
 CUSTOM_AI_API_KEY = os.environ.get("CUSTOM_AI_API_KEY", "ai_key_1762b5a10bdc7ed4a5db091d")
 
+# --- Supabase Cloud Database Configuration ---
+SUPABASE_URL = "https://xtpxbopftgjdszmgajno.supabase.com"
+SUPABASE_KEY = "sb_secret_BBNbSpqcyVBxnnE8r-vMGQ_YWhRtp89"
+
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
+
 # Free Public Solana RPC URLs
 SOLANA_RPC_URLS = [
     "https://api.mainnet-beta.solana.com",
@@ -41,96 +51,73 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (Ultra-Optimized Autonomous AI Trader & Self-Healing Engine)"
-current_active_order = "Mission: Smart RPC routing, Auto-Blacklisting, AI Self-Healing & Trailing TP/SL."
+bot_status = "Active 🟢 (Cloud-Synced Autonomous AI Trader & Self-Healing Engine)"
+current_active_order = "Mission: Smart RPC routing, Supabase Cloud Sync, AI Self-Healing & Trailing TP/SL."
 is_bot_running = True
 
-# --- Persistent Storage Path Check (Render Persistent Disk Support) ---
-# রেন্ডারে /data ডিস্ক মাউন্ট করা থাকলে ডেটা সেখানে সেভ হবে, অন্যথায় লোকাল ফোল্ডারে
-DATA_DIR = "/data"
-if os.path.exists(DATA_DIR) and os.access(DATA_DIR, os.W_OK):
-    DB_FILE = os.path.join(DATA_DIR, "agent_database.db")
-    MEMORY_FILE = os.path.join(DATA_DIR, "persistent_agent_memory.json")
-else:
-    DB_FILE = "agent_database.db"
-    MEMORY_FILE = "persistent_agent_memory.json"
+# --- Supabase Table Initialization Helper ---
+def init_supabase_tables():
+    # Supabase REST API ব্যবহার করে টেবিল ডাটা সিঙ্ক হ্যান্ডেল করা হবে
+    pass
 
-# --- SQLite Database Setup for Secure Logging & Persistent Wallet Key ---
-def init_db():
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS earnings_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                balance REAL,
-                ai_strategy TEXT,
-                revenue REAL
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS active_positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                token_mint TEXT,
-                symbol TEXT,
-                amount REAL,
-                buy_price_usd REAL,
-                highest_price_usd REAL,
-                timestamp TEXT
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS system_config (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"DB Init Error: {e}")
+init_supabase_tables()
 
-init_db()
-
-# --- Load & Save Persistent Private Key from SQLite ---
+# --- Load & Save Persistent Private Key via Supabase ---
 def get_saved_wallet_key():
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM system_config WHERE key = 'private_key'")
-        row = cursor.fetchone()
-        conn.close()
-        if row and row[0]:
-            return row[0]
+        url = f"{SUPABASE_URL}/rest/v1/system_config?key=eq.private_key&select=value"
+        res = safe_get_supa(url)
+        if res and res.status_code == 200:
+            data = res.json()
+            if data and len(data) > 0:
+                return data[0].get("value", "")
     except Exception as e:
-        print(f"Load Key DB Error: {e}")
+        print(f"Load Key Supabase Error: {e}")
     return DEFAULT_SOLANA_PRIVATE_KEY
 
 def save_wallet_key_to_db(private_key):
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO system_config (key, value) VALUES ('private_key', ?)", (private_key,))
-        conn.commit()
-        conn.close()
+        url = f"{SUPABASE_URL}/rest/v1/system_config"
+        payload = {"key": "private_key", "value": private_key}
+        # Upsert operation via PostgREST header
+        headers = SUPABASE_HEADERS.copy()
+        headers["Prefer"] = "resolution=merge-duplicates"
+        safe_post_supa(url, json_data=payload, headers=headers)
     except Exception as e:
-        print(f"Save Key DB Error: {e}")
+        print(f"Save Key Supabase Error: {e}")
 
 runtime_private_key = get_saved_wallet_key()
 user_states = {}
 
+def safe_get_supa(url):
+    try:
+        return requests.get(url, headers=SUPABASE_HEADERS, timeout=8)
+    except Exception as e:
+        print(f"Supabase GET Error: {e}")
+        return None
+
+def safe_post_supa(url, json_data, headers=None):
+    try:
+        h = headers if headers else SUPABASE_HEADERS
+        return requests.post(url, json=json_data, headers=h, timeout=8)
+    except Exception as e:
+        print(f"Supabase POST Error: {e}")
+        return None
+
 def log_to_db(balance, strategy, revenue):
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO earnings_log (timestamp, balance, ai_strategy, revenue) VALUES (?, ?, ?, ?)",
-                       (time.ctime(), balance, strategy, revenue))
-        conn.commit()
-        conn.close()
+        url = f"{SUPABASE_URL}/rest/v1/earnings_log"
+        payload = {
+            "timestamp": time.ctime(),
+            "balance": balance,
+            "ai_strategy": strategy,
+            "revenue": revenue
+        }
+        safe_post_supa(url, json_data=payload)
     except Exception as e:
-        print(f"DB Log Error: {e}")
+        print(f"Cloud DB Log Error: {e}")
 
+# --- Persistent Memory via Supabase ---
 default_memory_data = {
     "strategy_pool": {
         "Smart_RPC_Router": {"weight": 4.5, "success": 0, "fail": 0},
@@ -149,24 +136,27 @@ default_memory_data = {
 
 def load_persistent_memory():
     try:
-        if os.path.exists(MEMORY_FILE):
-            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("strategy_pool", default_memory_data["strategy_pool"]), data.get("agent_memory", default_memory_data["agent_memory"])
+        url = f"{SUPABASE_URL}/rest/v1/system_config?key=eq.agent_memory_store&select=value"
+        res = safe_get_supa(url)
+        if res and res.status_code == 200:
+            data = res.json()
+            if data and len(data) > 0:
+                stored_json = json.loads(data[0].get("value", "{}"))
+                return stored_json.get("strategy_pool", default_memory_data["strategy_pool"]), stored_json.get("agent_memory", default_memory_data["agent_memory"])
     except Exception as e:
-        print(f"Memory Load Error: {e}")
+        print(f"Cloud Memory Load Error: {e}")
     return default_memory_data["strategy_pool"], default_memory_data["agent_memory"]
 
 def save_persistent_memory(s_pool, a_memory):
     try:
-        data = {
-            "strategy_pool": s_pool,
-            "agent_memory": a_memory
-        }
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        url = f"{SUPABASE_URL}/rest/v1/system_config"
+        full_data = json.dumps({"strategy_pool": s_pool, "agent_memory": a_memory})
+        payload = {"key": "agent_memory_store", "value": full_data}
+        headers = SUPABASE_HEADERS.copy()
+        headers["Prefer"] = "resolution=merge-duplicates"
+        safe_post_supa(url, json_data=payload, headers=headers)
     except Exception as e:
-        print(f"Memory Save Error: {e}")
+        print(f"Cloud Memory Save Error: {e}")
 
 strategy_pool, agent_memory = load_persistent_memory()
 
@@ -286,7 +276,7 @@ def get_real_solana_wallet_details():
 
 @app.route('/')
 def home():
-    return "🤖 Ultra-Optimized Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
+    return "🤖 Cloud-Synced Autonomous AI Trader is Active! Visit <a href='/dashboard'>/dashboard</a> to connect your wallet."
 
 @app.route('/dashboard')
 def dashboard():
@@ -353,7 +343,7 @@ def connect_wallet():
         with data_lock:
             runtime_private_key = private_key_input
             save_wallet_key_to_db(private_key_input)
-        return redirect(url_for('dashboard', msg='Wallet connected & saved securely! Bot is active.', error='0'))
+        return redirect(url_for('dashboard', msg='Wallet connected & saved securely to Cloud DB!', error='0'))
     except Exception as e:
         return redirect(url_for('dashboard', msg=f'Invalid Private Key: {str(e)[:40]}', error='1'))
 
@@ -377,15 +367,15 @@ def telegram_webhook():
             if text.startswith("/start"):
                 if not is_connected:
                     welcome_text = (
-                        "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
+                        "🚀 *Cloud-Synced Autonomous AI Agent Activated!*\n\n"
                         "⚠️ *Wallet Status:* Not Connected 🔴\n\n"
                         "Please click or send `/enter` to open the Web Dashboard and connect your Solana wallet securely."
                     )
                 else:
                     welcome_text = (
-                        "🚀 *Ultra-Optimized Autonomous AI Agent Activated!*\n\n"
-                        "🟢 *Wallet Status:* Connected (Persistent & Simulation Ready)\n"
-                        "🔍 *Mode:* Smart RPC Router, Auto-Blacklisting, AI Self-Healing & Trailing TP/SL.\n\n"
+                        "🚀 *Cloud-Synced Autonomous AI Agent Activated!*\n\n"
+                        "🟢 *Wallet Status:* Connected (Supabase Cloud-Synced)\n"
+                        "🔍 *Mode:* Smart RPC, Auto-Blacklist, AI Self-Healing & Cloud Memory.\n\n"
                         "Commands:\n"
                         "📊 `/status` - Complete portfolio valuation & system state\n"
                         "💰 `/balance` - Live balance of SOL & all SPL assets\n"
@@ -919,7 +909,7 @@ def add_to_blacklist(mint, reason):
             save_persistent_memory(strategy_pool, agent_memory)
 
 # ==========================================
-# --- JUPITER REAL SWAP EXECUTION ENGINE (WITH AUTO-HEALING & ADAPTIVE RETRY) ---
+# --- JUPITER REAL SWAP EXECUTION ENGINE ---
 # ==========================================
 def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage_bps=100):
     max_attempts = 2
@@ -992,7 +982,7 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
                     
                     if action == "INCREASE_SLIPPAGE" and attempt == 0:
                         current_slippage += int(heal_directive.get("adjustment_value", 100))
-                        send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Activated:* Increasing slippage to `{current_slippage/100}%` and retrying swap automatically...")
+                        send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Activated:* Increasing slippage to `{current_slippage/100}%` and retrying...")
                         continue
                     elif action == "SWITCH_RPC":
                         send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Activated:* Switching RPC route and retrying...")
@@ -1013,12 +1003,12 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
             if attempt < max_attempts - 1 and action in ["RETRY", "INCREASE_SLIPPAGE", "SWITCH_RPC"]:
                 if action == "INCREASE_SLIPPAGE":
                     current_slippage += 100
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Auto-Fix:* Handled error via `{action}`. Retrying immediately...")
+                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Auto-Fix:* Handled error via `{action}`. Retrying...")
                 time.sleep(2)
                 continue
             else:
                 try:
-                    send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Critical Swap Exception Handled:* `{err_str[:80]}`\n• *AI Action Taken:* {heal_directive.get('reason', 'Max retries reached')}")
+                    send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Critical Swap Exception Handled:* `{err_str[:80]}`")
                 except:
                     pass
                 return f"⚠️ Swap Execution Notice: {err_str[:50]}"
@@ -1028,19 +1018,25 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
 # --- 📈 TRAILING STOP-LOSS & TAKE-PROFIT ---
 # ==========================================
 def track_and_execute_trailing_tpsl():
+    # ক্লাউড সিঙ্কড পজিশন ট্র্যাকিং লজিক
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, token_mint, symbol, amount, buy_price_usd, highest_price_usd FROM active_positions")
-        positions = cursor.fetchall()
-        conn.close()
-
+        url = f"{SUPABASE_URL}/rest/v1/active_positions?select=*"
+        res = safe_get_supa(url)
+        if not res or res.status_code != 200:
+            return
+        positions = res.json()
         if not positions:
             return
 
         for pos in positions:
-            pos_id, mint, symbol, amount, buy_price, highest_price = pos
-            if buy_price <= 0:
+            pos_id = pos.get("id")
+            mint = pos.get("token_mint")
+            symbol = pos.get("symbol")
+            amount = pos.get("amount")
+            buy_price = pos.get("buy_price_usd")
+            highest_price = pos.get("highest_price_usd")
+
+            if not buy_price or buy_price <= 0:
                 continue
 
             _, current_price = get_token_symbol_and_price(mint)
@@ -1049,11 +1045,8 @@ def track_and_execute_trailing_tpsl():
 
             if current_price > highest_price:
                 highest_price = current_price
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE active_positions SET highest_price_usd = ? WHERE id = ?", (highest_price, pos_id))
-                conn.commit()
-                conn.close()
+                up_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
+                safe_post_supa(up_url, json_data={"highest_price_usd": highest_price}, headers={**SUPABASE_HEADERS, "Prefer": "resolution=merge-duplicates"})
 
             total_pnl_pct = ((current_price - buy_price) / buy_price) * 100
             drawdown_from_peak = ((highest_price - current_price) / highest_price) * 100
@@ -1068,11 +1061,8 @@ def track_and_execute_trailing_tpsl():
                 send_telegram_message(TELEGRAM_CHAT_ID, f"✅ *Take-Profit Execution:*\n{sell_result}")
                 update_agent_learning("Trailing_TP_SL_Engine", True)
                 
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM active_positions WHERE id = ?", (pos_id,))
-                conn.commit()
-                conn.close()
+                del_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
+                requests.delete(del_url, headers=SUPABASE_HEADERS, timeout=5)
 
             elif drawdown_from_peak >= 15.0 or total_pnl_pct <= -15.0:
                 reason = f"Trailing Drop (-{drawdown_from_peak:.2f}% from peak)" if drawdown_from_peak >= 15.0 else f"Fixed Stop-Loss ({total_pnl_pct:.2f}%)"
@@ -1084,23 +1074,13 @@ def track_and_execute_trailing_tpsl():
                 
                 send_telegram_message(TELEGRAM_CHAT_ID, f"🛑 *Stop-Loss Execution:*\n{sell_result}")
                 update_agent_learning("Trailing_TP_SL_Engine", False, reason)
-                
                 add_to_blacklist(mint, f"Hit Stop-Loss at {total_pnl_pct:.2f}%")
                 
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM active_positions WHERE id = ?", (pos_id,))
-                conn.commit()
-                conn.close()
+                del_url = f"{SUPABASE_URL}/rest/v1/active_positions?id=eq.{pos_id}"
+                requests.delete(del_url, headers=SUPABASE_HEADERS, timeout=5)
 
     except Exception as e:
-        err_msg = str(e)
-        print(f"Trailing TP/SL Error: {e}")
-        heal_directive = ai_autonomous_self_heal(e, "track_and_execute_trailing_tpsl")
-        try:
-            send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Monitor:* Handled TP/SL exception via auto-adaptation.")
-        except:
-            pass
+        print(f"Cloud TP/SL Error: {e}")
 
 # ==========================================
 # --- AUTONOMOUS TOKEN DISCOVERY & SCANNING ---
@@ -1146,18 +1126,18 @@ def evaluate_real_system_state(balance_sol):
         current_mission = current_active_order
 
     state_report = (
-        f"⚙️ *Live System Execution Report*\n"
+        f"⚙️ *Cloud System Execution Report*\n"
         f"• **Active Mission:** {current_mission}\n"
         f"{market_msg}\n"
         f"• **Total Portfolio USD:** `${portfolio_usd:.2f} USD`\n"
         f"• **Latest Transaction Log:** {tx_status}\n"
-        f"• **Execution Mode:** Smart RPC & AI Self-Healing Active."
+        f"• **Execution Mode:** Supabase Cloud DB & Self-Healing Active."
     )
     
-    log_to_db(balance_sol, "Optimized_Agent_Active", portfolio_usd)
+    log_to_db(balance_sol, "Cloud_Optimized_Agent", portfolio_usd)
     return state_report
 
-# --- Autonomous AI Trading & Self-Healing Pipeline ---
+# --- Autonomous AI Trading & Cloud Pipeline ---
 def run_autonomous_solana_ai_brain():
     global bot_status, is_bot_running
     while True:
@@ -1204,7 +1184,7 @@ def run_autonomous_solana_ai_brain():
                     
                     if sim_success:
                         if is_paper_mode:
-                            send_telegram_message(TELEGRAM_CHAT_ID, f"🧪 *Virtual Simulation BUY (Paper Trading)*\n• Token: `{symbol}`\n• Status: Simulated successfully to train AI strategy.")
+                            send_telegram_message(TELEGRAM_CHAT_ID, f"🧪 *Virtual Simulation BUY (Paper Trading)*\n• Token: `{symbol}`\n• Status: Simulated successfully in cloud sync mode.")
                             update_agent_learning("Optimized_AI_Trader", True)
                             trade_executed = True
                         else:
@@ -1218,12 +1198,16 @@ def run_autonomous_solana_ai_brain():
                             
                             _, token_buy_price = get_token_symbol_and_price(mint)
                             if token_buy_price > 0:
-                                conn = sqlite3.connect(DB_FILE)
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO active_positions (token_mint, symbol, amount, buy_price_usd, highest_price_usd, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                                               (mint, symbol, 0.01, token_buy_price, token_buy_price, time.ctime()))
-                                conn.commit()
-                                conn.close()
+                                pos_url = f"{SUPABASE_URL}/rest/v1/active_positions"
+                                pos_payload = {
+                                    "token_mint": mint,
+                                    "symbol": symbol,
+                                    "amount": 0.01,
+                                    "buy_price_usd": token_buy_price,
+                                    "highest_price_usd": token_buy_price,
+                                    "timestamp": time.ctime()
+                                }
+                                safe_post_supa(pos_url, json_data=pos_payload)
 
                             trade_executed = True
                             update_agent_learning("Optimized_AI_Trader", True)
@@ -1234,21 +1218,17 @@ def run_autonomous_solana_ai_brain():
                 
             if not trade_executed:
                 system_report = evaluate_real_system_state(balance_sol)
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Market Monitor & Learning Cycle*\n{mode_label}\n👛 *Wallet:* `{wallet_address}` | 💰 *SOL:* `{balance_sol:.4f}`\n\n{system_report}")
+                send_telegram_message(TELEGRAM_CHAT_ID, f"🚨 *Cloud Market Monitor & Learning Cycle*\n{mode_label}\n👛 *Wallet:* `{wallet_address}` | 💰 *SOL:* `{balance_sol:.4f}`\n\n{system_report}")
             
             time.sleep(300)
         except Exception as e:
             err_msg = str(e)
             print(f"Autonomous Brain Error: {e}")
-            
             heal_directive = ai_autonomous_self_heal(e, "run_autonomous_solana_ai_brain")
-            action = heal_directive.get("action", "RETRY")
-            
             try:
-                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Triggered:* Main brain issue resolved via `{action}`.")
+                send_telegram_message(TELEGRAM_CHAT_ID, f"🤖 *AI Self-Healing Triggered:* Cloud brain issue resolved via auto-adaptation.")
             except:
                 pass
-
             update_agent_learning("Optimized_AI_Trader", False, err_msg)
             time.sleep(15)
 
