@@ -40,8 +40,8 @@ app = Flask(__name__)
 # --- Thread Lock for Global State Safety ---
 data_lock = Lock()
 
-bot_status = "Active 🟢 (AI-Powered Autonomous Trading Agent Enabled)"
-current_active_order = "Mission: Real-time on-chain tracking, AI analysis, and automated execution."
+bot_status = "Active 🟢 (Multi-API & Live Trans Agent Enabled)"
+current_active_order = "Mission: Multi-source market tracking, live on-chain audit, and AI analysis."
 is_bot_running = True
 
 # --- SQLite Database Setup for Secure Logging ---
@@ -84,7 +84,7 @@ MEMORY_FILE = "persistent_agent_memory.json"
 default_memory_data = {
     "strategy_pool": {
         "Real_OnChain_Monitor": {"weight": 2.5, "success": 0, "fail": 0},
-        "Live_Market_Tracking": {"weight": 2.2, "success": 0, "fail": 0},
+        "Multi_Market_Tracking": {"weight": 2.5, "success": 0, "fail": 0},
         "Jupiter_Swap_Engine": {"weight": 3.0, "success": 0, "fail": 0}
     },
     "agent_memory": {
@@ -132,7 +132,7 @@ def send_telegram_message(chat_id, text_message):
 
 @app.route('/')
 def home():
-    return "🤖 AI-Powered Autonomous Solana Trading & Monitoring Agent is Active!"
+    return "🤖 Multi-API Autonomous Solana Trading & Monitoring Agent is Active!"
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def telegram_webhook():
@@ -146,12 +146,13 @@ def telegram_webhook():
 
             if text.startswith("/start"):
                 welcome_text = (
-                    "🚀 *AI-Powered Autonomous Trading Agent Activated!*\n\n"
-                    "🔍 *Mode:* Live On-Chain Data, AI Analysis & Jupiter Swap.\n\n"
+                    "🚀 *Multi-API Autonomous Agent Activated!*\n\n"
+                    "🔍 *Mode:* Multi-Source Market Tracking, AI Analysis & Live Transactions.\n\n"
                     "Commands:\n"
                     "📊 `/status` - System performance & AI state\n"
-                    "💰 `/balance` - Live balance and transaction records\n"
-                    "📈 `/scan` - Real market price & AI risk assessment\n"
+                    "💰 `/balance` - Live balance & latest record\n"
+                    "📜 `/trans` - View first 10 live transactions\n"
+                    "📈 `/scan` - Multi-API market price & AI risk scan\n"
                     "⚡ `/swap` - Test DEX execution check\n"
                     "🛑 `/stop` - Pause agent operations\n"
                     "✍️ `Order: [your command]` - Update operational focus"
@@ -163,7 +164,7 @@ def telegram_webhook():
                 system_state_msg = evaluate_real_system_state(balance_sol)
                 
                 status_msg = (
-                    f"📊 *AI System Status Report*\n\n"
+                    f"📊 *System Status Report*\n\n"
                     f"👛 *Wallet Address:* `{wallet_address}`\n"
                     f"💰 *Current Balance:* `{balance_sol:.4f} SOL`\n"
                     f"💸 *Tracked Revenue:* `{agent_memory['total_revenue_generated_sol']:.4f} SOL`\n\n"
@@ -182,17 +183,21 @@ def telegram_webhook():
                 )
                 send_telegram_message(chat_id, bal_msg)
 
+            elif text.startswith("/trans"):
+                # নতুন কমান্ড: প্রথম ১০টি লাইভ ট্রানজাকশন দেখার জন্য
+                trans_result = tool_fetch_multiple_real_transactions(10)
+                send_telegram_message(chat_id, f"📜 *Latest 10 Live Transactions*\n\n{trans_result}")
+
             elif text.startswith("/scan"):
                 success, market_msg = tool_fetch_real_market_data()
                 wallet_address, balance_sol = get_real_solana_wallet_details()
                 tx_status = tool_check_real_incoming_transactions()
                 
-                # রিয়েল ডাটা এআই ব্রেইনে পাঠিয়ে এনালাইসিস নেওয়া
                 ai_context = {"wallet": wallet_address, "balance": balance_sol, "market": market_msg, "last_tx": tx_status}
                 ai_verdict = analyze_data_with_custom_ai(ai_context)
                 
                 scan_result = f"{market_msg}\n\n🧠 *AI Security & Market Verdict:*\n{ai_verdict}"
-                send_telegram_message(chat_id, f"🔍 *Live Market & AI Scan*\n\n{scan_result}")
+                send_telegram_message(chat_id, f"🔍 *Multi-API Market & AI Scan*\n\n{scan_result}")
 
             elif text.startswith("/swap"):
                 swap_result = execute_jupiter_swap_test()
@@ -250,7 +255,7 @@ def get_solana_keypair():
         return None
 
 # ==========================================
-# --- REAL ON-CHAIN & MARKET TOOLS ---
+# --- REAL ON-CHAIN & MULTI-API TOOLS ---
 # ==========================================
 
 def get_real_solana_wallet_details():
@@ -275,17 +280,34 @@ def get_real_solana_wallet_details():
     return wallet_address, balance_sol
 
 def tool_fetch_real_market_data():
+    """
+    একাধিক মার্কেট এপিআই (Binance এবং CoinGecko) ফলব্যাক সিস্টেমসহ প্রাইস ফেচ করার ফাংশন।
+    """
+    # ১. প্রথমে বাইন্যান্স পাবলিক এপিআই চেষ্টা করবে (খুব ফাস্ট ও রিলায়েবল)
+    try:
+        url = "https://api.binance.com/api/v3/ticker/24hr?symbol=SOLUSDT"
+        res = requests.get(url, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            price = float(data.get("lastPrice", 0))
+            change = float(data.get("priceChangePercent", 0))
+            return True, f"• **Network Status:** Connected (Binance API)\n• **SOL Market Price:** ${price:.2f} USD\n• **24h Price Change:** {change:.2f}%"
+    except Exception:
+        pass
+
+    # ২. বাইন্যান্স ফেইল করলে কয়েনগিকো (CoinGecko) এপিআই চেষ্টা করবে
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true"
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=4)
         if res.status_code == 200:
             data = res.json()
             price = data.get("solana", {}).get("usd", 0)
             change = data.get("solana", {}).get("usd_24h_change", 0)
-            return True, f"• **Network Status:** Connected to Solana Mainnet RPCs\n• **SOL Market Price:** ${price} USD\n• **24h Price Change:** {change:.2f}%"
-    except Exception as _e:
+            return True, f"• **Network Status:** Connected (CoinGecko API)\n• **SOL Market Price:** ${price} USD\n• **24h Price Change:** {change:.2f}%"
+    except Exception:
         pass
-    return False, "• **Network Status:** Connected\n• **Market Feed:** Temporarily unavailable via CoinGecko API"
+
+    return False, "• **Network Status:** Connected\n• **Market Feed:** All market APIs temporarily unavailable (Rate limit protection active)."
 
 def tool_check_real_incoming_transactions():
     try:
@@ -315,13 +337,44 @@ def tool_check_real_incoming_transactions():
     except Exception as e:
         return f"Error fetching transactions: {str(e)[:25]}"
 
+def tool_fetch_multiple_real_transactions(limit=10):
+    """
+    ওয়ালেটের সাম্প্রতিক প্রথম ১০টি লাইভ ট্রানজাকশন ব্লকচেইন থেকে ফেচ করার ফাংশন (/trans কমান্ডের জন্য)।
+    """
+    try:
+        keypair = get_solana_keypair()
+        if not keypair:
+            return "❌ Keypair configuration error."
+        pubkey_str = str(keypair.pubkey())
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getSignaturesForAddress",
+            "params": [pubkey_str, {"limit": limit}]
+        }
+        for rpc in SOLANA_RPC_URLS:
+            try:
+                res = requests.post(rpc, json=payload, timeout=6).json()
+                if "result" in res and res["result"]:
+                    sigs = res["result"]
+                    tx_list = []
+                    for idx, sig_info in enumerate(sigs, 1):
+                        sig = sig_info.get("signature", "N/A")
+                        slot = sig_info.get("slot", "N/A")
+                        err = sig_info.get("err")
+                        status = "Success 🟢" if err is None else "Failed 🔴"
+                        tx_list.append(f"{idx}. `[Slot {slot}]`\n   • Sign: `{sig[:20]}...`\n   • Status: {status}")
+                    return "\n".join(tx_list)
+            except Exception:
+                continue
+        return "⚠️ No recent transactions found on-chain."
+    except Exception as e:
+        return f"❌ Error fetching transactions: {str(e)[:40]}"
+
 # ==========================================
-# --- NEW: AI ANALYSIS & SELF-LEARNING BRIDGE ---
+# --- AI ANALYSIS & SELF-LEARNING BRIDGE ---
 # ==========================================
 def analyze_data_with_custom_ai(transaction_details):
-    """
-    সোলানা ব্লকচেইনের রিয়েল ডেটা কাস্টম এআই এপিআই-তে পাঠায় এবং স্ক্যাম/নিরাপত্তা বিশ্লেষণ গ্রহণ করে।
-    """
     try:
         headers = {
             "Authorization": f"Bearer {CUSTOM_AI_API_KEY}",
@@ -344,9 +397,6 @@ def analyze_data_with_custom_ai(transaction_details):
         return f"🤖 AI Bridge Active (Offline fallback mode: No critical threats detected)"
 
 def update_agent_learning(strategy_name, is_success, error_message=""):
-    """
-    ভুল বা ব্যর্থতা থেকে শিক্ষা নিয়ে বটের স্ট্র্যাটেজি মেমরি আপডেট করে।
-    """
     global strategy_pool, agent_memory
     with data_lock:
         if strategy_name in strategy_pool:
@@ -387,7 +437,6 @@ def execute_jupiter_swap_test():
             out_amount = int(data.get("outAmount", 0)) / 1000000  
             price_impact = data.get("priceImpactPct", "0")
             
-            # সফল হলে লার্নিং আপডেট করা
             update_agent_learning("Jupiter_Swap_Engine", True)
             return f"✅ **Swap Route Found via Jupiter!**\n• Input: 0.1 SOL\n• Estimated Output: ~{out_amount:.2f} USDC\n• Price Impact: {price_impact}%\n• *Execution engine is ready.*"
         else:
@@ -412,10 +461,10 @@ def evaluate_real_system_state(balance_sol):
         f"• **Active Mission:** {current_mission}\n"
         f"{market_msg}\n"
         f"• **Latest Transaction Log:** {tx_status}\n"
-        f"• **Execution Mode:** AI-Powered RPC & Self-Learning Active."
+        f"• **Execution Mode:** Multi-API RPC & Self-Learning Active."
     )
     
-    log_to_db(balance_sol, "AI_System_Check_Active", 0.0)
+    log_to_db(balance_sol, "Multi_API_System_Active", 0.0)
     return state_report
 
 # --- Autonomous Background Worker ---
@@ -433,7 +482,7 @@ def run_autonomous_solana_ai_brain():
             system_report = evaluate_real_system_state(balance_sol)
             
             action_log = (
-                f"🚨 *Live Periodic AI System Check*\n"
+                f"🚨 *Live Periodic System Check*\n"
                 f"👛 *Wallet:* `{wallet_address}` | 💰 *Balance:* `{balance_sol:.4f} SOL`\n\n"
                 f"{system_report}"
             )
