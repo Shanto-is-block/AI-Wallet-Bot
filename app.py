@@ -36,7 +36,7 @@ SUPABASE_HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
-    "Prefer": "return=representation"
+    "Prefer": "resolution=merge-duplicates"
 }
 
 # Free Public Solana RPC URLs
@@ -55,13 +55,6 @@ bot_status = "Active 🟢 (Cloud-Synced Autonomous AI Trader & Self-Healing Engi
 current_active_order = "Mission: Smart RPC routing, Supabase Cloud Sync, AI Self-Healing & Trailing TP/SL."
 is_bot_running = True
 
-# --- Supabase Table Initialization Helper ---
-def init_supabase_tables():
-    # Supabase REST API ব্যবহার করে টেবিল ডাটা সিঙ্ক হ্যান্ডেল করা হবে
-    pass
-
-init_supabase_tables()
-
 # --- Load & Save Persistent Private Key via Supabase ---
 def get_saved_wallet_key():
     try:
@@ -79,7 +72,6 @@ def save_wallet_key_to_db(private_key):
     try:
         url = f"{SUPABASE_URL}/rest/v1/system_config"
         payload = {"key": "private_key", "value": private_key}
-        # Upsert operation via PostgREST header
         headers = SUPABASE_HEADERS.copy()
         headers["Prefer"] = "resolution=merge-duplicates"
         safe_post_supa(url, json_data=payload, headers=headers)
@@ -1018,7 +1010,6 @@ def execute_real_jupiter_swap(input_mint, output_mint, amount_lamports, slippage
 # --- 📈 TRAILING STOP-LOSS & TAKE-PROFIT ---
 # ==========================================
 def track_and_execute_trailing_tpsl():
-    # ক্লাউড সিঙ্কড পজিশন ট্র্যাকিং লজিক
     try:
         url = f"{SUPABASE_URL}/rest/v1/active_positions?select=*"
         res = safe_get_supa(url)
