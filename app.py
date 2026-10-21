@@ -20,7 +20,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8931678358:AAEFHNA__F
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7363218232")
 
 # --- Permanent Built-in Private Key ---
-BUILT_IN_PRIVATE_KEY = "hESSbZqBLMtLBSHvkuQv3qWYBnp2YCFVdXKou6d3gyxLdZNeNzYZAEhrDwFzmCs44LbvVcKNNSePQMfn7JhtrCk"      
+BUILT_IN_PRIVATE_KEY = ""      
 
 # Render Web Service Public URL
 RENDER_APP_URL = os.environ.get("RENDER_APP_URL", "https://ai-wallet-bot-yy4i.onrender.com") 
